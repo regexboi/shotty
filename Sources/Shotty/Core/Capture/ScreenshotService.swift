@@ -1,59 +1,219 @@
 import AppKit
+import CoreGraphics
 import Foundation
+@preconcurrency import ScreenCaptureKit
 
 @MainActor
 final class ScreenshotService {
-    func makePlaceholderImage() -> CapturedImage {
-        let size = NSSize(width: 1440, height: 900)
-        let image = NSImage(size: size)
+    enum CaptureError: LocalizedError {
+        case selectionMissingDisplay
+        case missingDisplayMetadata
+        case captureUnavailable
+        case imageConstructionFailed
 
-        image.lockFocus()
+        var errorDescription: String? {
+            switch self {
+            case .selectionMissingDisplay:
+                return "The selected region did not intersect any active display."
+            case .missingDisplayMetadata:
+                return "Shotty could not resolve the selected display for capture."
+            case .captureUnavailable:
+                return "ScreenCaptureKit returned an empty screenshot."
+            case .imageConstructionFailed:
+                return "Shotty could not build an image from the captured pixels."
+            }
+        }
+    }
 
-        let bounds = NSRect(origin: .zero, size: size)
-        let gradient = NSGradient(colors: [
-            NSColor(calibratedRed: 0.08, green: 0.07, blue: 0.15, alpha: 1.0),
-            NSColor(calibratedRed: 0.18, green: 0.10, blue: 0.34, alpha: 1.0),
-            NSColor(calibratedRed: 0.34, green: 0.21, blue: 0.71, alpha: 1.0)
-        ])
+    func captureSelection(in rect: CGRect) async throws -> CapturedImage {
+        let selection = rect.standardized.integral
+        let intersectingScreens = NSScreen.screens.filter { $0.frame.intersects(selection) }
 
-        gradient?.draw(in: bounds, angle: 135)
+        guard intersectingScreens.isEmpty == false else {
+            throw CaptureError.selectionMissingDisplay
+        }
 
-        NSColor.white.withAlphaComponent(0.14).setStroke()
-        let insetFrame = bounds.insetBy(dx: 96, dy: 96)
-        let framePath = NSBezierPath(roundedRect: insetFrame, xRadius: 28, yRadius: 28)
-        framePath.lineWidth = 4
-        framePath.stroke()
+        let image: CGImage
+        if #available(macOS 15.2, *) {
+            image = try await captureImageUsingDisplayAgnosticAPI(in: selection)
+        } else {
+            image = try await captureImageByCompositingDisplays(in: selection, screens: intersectingScreens)
+        }
 
-        let dashedPath = NSBezierPath(rect: insetFrame.insetBy(dx: 24, dy: 24))
-        let pattern: [CGFloat] = [14, 10]
-        dashedPath.setLineDash(pattern, count: pattern.count, phase: 0)
-        dashedPath.lineWidth = 2
-        dashedPath.stroke()
-
-        let title = NSString(string: "Phase 1 Placeholder Capture")
-        title.draw(
-            at: NSPoint(x: 120, y: size.height - 210),
-            withAttributes: [
-                .font: NSFont.systemFont(ofSize: 40, weight: .semibold),
-                .foregroundColor: NSColor.white.withAlphaComponent(0.95)
-            ]
-        )
-
-        let subtitle = NSString(string: "Hotkey and permission flow are wired. Region selection lands in Phase 2.")
-        subtitle.draw(
-            at: NSPoint(x: 120, y: size.height - 260),
-            withAttributes: [
-                .font: NSFont.systemFont(ofSize: 24, weight: .regular),
-                .foregroundColor: NSColor.white.withAlphaComponent(0.78)
-            ]
-        )
-
-        image.unlockFocus()
+        let preferredScale = maximumScale(for: intersectingScreens)
+        let nsImage = NSImage(cgImage: image, size: NSSize(width: selection.width, height: selection.height))
 
         return CapturedImage(
-            image: image,
-            captureRect: CGRect(origin: .zero, size: CGSize(width: size.width, height: size.height)),
-            displayScale: NSScreen.main?.backingScaleFactor ?? 2.0
+            image: nsImage,
+            captureRect: selection,
+            displayScale: preferredScale
         )
+    }
+
+    @available(macOS 15.2, *)
+    private func captureImageUsingDisplayAgnosticAPI(in rect: CGRect) async throws -> CGImage {
+        try await withCheckedThrowingContinuation { continuation in
+            SCScreenshotManager.captureImage(in: rect) { image, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                guard let image else {
+                    continuation.resume(throwing: CaptureError.captureUnavailable)
+                    return
+                }
+
+                continuation.resume(returning: image)
+            }
+        }
+    }
+
+    private func captureImageByCompositingDisplays(
+        in rect: CGRect,
+        screens: [NSScreen]
+    ) async throws -> CGImage {
+        let shareableContent = try await currentShareableContent()
+        let displaysByID = Dictionary(uniqueKeysWithValues: shareableContent.displays.map { ($0.displayID, $0) })
+
+        let orderedSegments = screens
+            .sorted { lhs, rhs in
+                if lhs.frame.minY == rhs.frame.minY {
+                    return lhs.frame.minX < rhs.frame.minX
+                }
+                return lhs.frame.minY < rhs.frame.minY
+            }
+            .compactMap { screen -> CapturedSegment? in
+                let intersection = rect.intersection(screen.frame)
+                guard intersection.isNull == false, intersection.isEmpty == false else { return nil }
+
+                guard
+                    let displayID = screen.displayID,
+                    let display = displaysByID[displayID]
+                else {
+                    return nil
+                }
+
+                return CapturedSegment(
+                    screen: screen,
+                    display: display,
+                    intersection: intersection
+                )
+            }
+
+        guard orderedSegments.isEmpty == false else {
+            throw CaptureError.missingDisplayMetadata
+        }
+
+        var renderedSegments: [RenderedSegment] = []
+        for segment in orderedSegments {
+            let image = try await captureSegment(segment)
+            renderedSegments.append(
+                RenderedSegment(
+                    image: image,
+                    intersection: segment.intersection
+                )
+            )
+        }
+
+        let compositeScale = maximumScale(for: screens)
+        let pixelWidth = max(1, Int((rect.width * compositeScale).rounded(.up)))
+        let pixelHeight = max(1, Int((rect.height * compositeScale).rounded(.up)))
+
+        guard
+            let colorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpace(name: CGColorSpace.displayP3),
+            let context = CGContext(
+                data: nil,
+                width: pixelWidth,
+                height: pixelHeight,
+                bitsPerComponent: 8,
+                bytesPerRow: 0,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            )
+        else {
+            throw CaptureError.imageConstructionFailed
+        }
+
+        context.interpolationQuality = .high
+        context.clear(CGRect(x: 0, y: 0, width: pixelWidth, height: pixelHeight))
+
+        for segment in renderedSegments {
+            let origin = CGPoint(
+                x: (segment.intersection.minX - rect.minX) * compositeScale,
+                y: (segment.intersection.minY - rect.minY) * compositeScale
+            )
+            let size = CGSize(
+                width: segment.intersection.width * compositeScale,
+                height: segment.intersection.height * compositeScale
+            )
+            context.draw(segment.image, in: CGRect(origin: origin, size: size))
+        }
+
+        guard let composite = context.makeImage() else {
+            throw CaptureError.imageConstructionFailed
+        }
+
+        return composite
+    }
+
+    private func captureSegment(_ segment: CapturedSegment) async throws -> CGImage {
+        let configuration = SCStreamConfiguration()
+        configuration.showsCursor = false
+        configuration.capturesAudio = false
+        configuration.width = max(1, Int((segment.intersection.width * segment.screen.backingScaleFactor).rounded(.up)))
+        configuration.height = max(1, Int((segment.intersection.height * segment.screen.backingScaleFactor).rounded(.up)))
+        configuration.sourceRect = CGRect(
+            x: segment.intersection.minX - segment.screen.frame.minX,
+            y: segment.intersection.minY - segment.screen.frame.minY,
+            width: segment.intersection.width,
+            height: segment.intersection.height
+        )
+
+        let filter = SCContentFilter(display: segment.display, excludingWindows: [])
+
+        return try await withCheckedThrowingContinuation { continuation in
+            SCScreenshotManager.captureImage(contentFilter: filter, configuration: configuration) { image, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+
+                guard let image else {
+                    continuation.resume(throwing: CaptureError.captureUnavailable)
+                    return
+                }
+
+                continuation.resume(returning: image)
+            }
+        }
+    }
+
+    private func currentShareableContent() async throws -> SCShareableContent {
+        try await SCShareableContent.current
+    }
+
+    private func maximumScale(for screens: [NSScreen]) -> CGFloat {
+        screens
+            .map(\.backingScaleFactor)
+            .max() ?? 1
+    }
+}
+
+private struct CapturedSegment {
+    let screen: NSScreen
+    let display: SCDisplay
+    let intersection: CGRect
+}
+
+private struct RenderedSegment {
+    let image: CGImage
+    let intersection: CGRect
+}
+
+private extension NSScreen {
+    var displayID: CGDirectDisplayID? {
+        (deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)
+            .map { CGDirectDisplayID($0.uint32Value) }
     }
 }

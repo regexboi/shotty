@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 final class ExportService {
-    func copyPlaceholder(document: EditorDocument) -> Bool {
+    func copyCurrentImage(document: EditorDocument) -> Bool {
         guard let image = document.capturedImage?.image else { return false }
 
         let pasteboard = NSPasteboard.general
@@ -11,7 +11,7 @@ final class ExportService {
         return pasteboard.writeObjects([image])
     }
 
-    func showPlaceholderSavePanel(for document: EditorDocument, from window: NSWindow?) -> Bool {
+    func showSavePanel(for document: EditorDocument, from window: NSWindow?) -> Bool {
         guard let image = document.capturedImage?.image else { return false }
         guard
             let tiffData = image.tiffRepresentation,

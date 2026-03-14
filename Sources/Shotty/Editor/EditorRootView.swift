@@ -24,7 +24,7 @@ struct EditorRootView: View {
                     .font(.system(size: 30, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.96))
 
-                Text("Minimal screenshot utility foundation")
+                Text("Minimal screenshot utility")
                     .font(.system(size: 13, weight: .medium, design: .rounded))
                     .foregroundStyle(.white.opacity(0.6))
             }
@@ -60,12 +60,12 @@ struct EditorRootView: View {
             Spacer(minLength: 0)
 
             VStack(alignment: .leading, spacing: 10) {
-                actionButton("Copy Placeholder", systemImage: "doc.on.doc") {
-                    viewModel.copyPlaceholderToPasteboard()
+                actionButton("Copy Current Image", systemImage: "doc.on.doc") {
+                    viewModel.copyCurrentImageToPasteboard()
                 }
 
-                actionButton("Save Placeholder", systemImage: "square.and.arrow.down") {
-                    viewModel.savePlaceholderImage()
+                actionButton("Save Current Image", systemImage: "square.and.arrow.down") {
+                    viewModel.saveCurrentImage()
                 }
 
                 actionButton("Open Screen Recording Settings", systemImage: "gearshape") {
@@ -143,7 +143,7 @@ struct EditorRootView: View {
                             .font(.system(size: 28, weight: .semibold, design: .rounded))
                             .foregroundStyle(.white.opacity(0.94))
 
-                        Text("Launch the app, hit the global hotkey, and the placeholder capture flow will light up this canvas.")
+                        Text("Launch the app, hit the global hotkey, and the selected screenshot will appear here.")
                             .font(.system(size: 15, weight: .medium, design: .rounded))
                             .foregroundStyle(.white.opacity(0.68))
                             .multilineTextAlignment(.center)
@@ -155,7 +155,7 @@ struct EditorRootView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             VStack(alignment: .leading, spacing: 12) {
-                Text("Phase 1 Notes")
+                Text("Capture Notes")
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.84))
 
@@ -167,12 +167,12 @@ struct EditorRootView: View {
 
                     noteCard(
                         title: "Capture path",
-                        body: "Global hotkey and permission prompt are wired. Real region overlay and capture are intentionally deferred."
+                        body: "The global hotkey now opens a real multi-display selection overlay and routes the resulting screenshot into the editor."
                     )
 
                     noteCard(
                         title: "Keyboard",
-                        body: "Esc closes the editor shell. Copy/save buttons already exercise export placeholders."
+                        body: "Esc cancels capture or closes the editor shell. Copy/save currently export the raw captured image."
                     )
                 }
             }

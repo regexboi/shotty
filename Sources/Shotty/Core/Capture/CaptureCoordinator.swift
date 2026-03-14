@@ -20,6 +20,7 @@ final class CaptureCoordinator {
     private let screenshotService: ScreenshotService
     private let selectionOverlayWindow = SelectionOverlayWindow()
     private let userDefaults: UserDefaults
+    private var isCaptureInProgress = false
 
     init(
         editorViewModel: EditorViewModel,
@@ -39,20 +40,25 @@ final class CaptureCoordinator {
     }
 
     func beginCaptureFromHotkey() {
-        editorWindowController.showEditor()
+        guard isCaptureInProgress == false else {
+            editorWindowController.showEditor()
+            editorViewModel.noteCaptureAlreadyInProgress()
+            return
+        }
+
         editorViewModel.noteCaptureRequested()
 
         switch currentPermissionState() {
         case .granted:
-            selectionOverlayWindow.beginPlaceholderSelection()
-            let placeholderImage = screenshotService.makePlaceholderImage()
-            editorViewModel.presentCapturePlaceholder(image: placeholderImage)
+            beginSelectionFlow()
         case .unknown:
             requestScreenCapturePermission()
         case .requesting:
+            editorWindowController.showEditor()
             editorViewModel.updatePermissionState(.requesting)
             editorViewModel.notePermissionRequestPending()
         case .denied:
+            editorWindowController.showEditor()
             editorViewModel.updatePermissionState(.denied)
             editorViewModel.notePermissionDenied()
         }
@@ -71,6 +77,7 @@ final class CaptureCoordinator {
     }
 
     private func requestScreenCapturePermission() {
+        editorWindowController.showEditor()
         editorViewModel.updatePermissionState(.requesting)
         editorViewModel.notePermissionRequestPending()
         userDefaults.set(true, forKey: Constants.permissionPromptedKey)
@@ -85,12 +92,58 @@ final class CaptureCoordinator {
                 self.editorViewModel.updatePermissionState(nextState)
 
                 if granted {
-                    self.selectionOverlayWindow.beginPlaceholderSelection()
-                    let placeholderImage = self.screenshotService.makePlaceholderImage()
-                    self.editorViewModel.presentCapturePlaceholder(image: placeholderImage)
+                    self.beginSelectionFlow()
                 } else {
+                    self.editorWindowController.showEditor()
                     self.editorViewModel.notePermissionDenied()
                 }
+            }
+        }
+    }
+
+    private func beginSelectionFlow() {
+        isCaptureInProgress = true
+        editorViewModel.noteSelectionStarted()
+        editorWindowController.closeEditor()
+
+        selectionOverlayWindow.beginSelection { [weak self] result in
+            guard let self else { return }
+
+            switch result {
+            case .cancelled:
+                self.isCaptureInProgress = false
+                self.editorWindowController.showEditor()
+                self.editorViewModel.noteCaptureCancelled()
+            case let .failed(message):
+                self.isCaptureInProgress = false
+                self.editorWindowController.showEditor()
+                self.editorViewModel.noteCaptureFailure(message)
+            case let .selected(rect):
+                Task { @MainActor [weak self] in
+                    await self?.captureSelection(in: rect)
+                }
+            }
+        }
+    }
+
+    private func captureSelection(in rect: CGRect) async {
+        editorViewModel.noteCaptureProcessing()
+
+        do {
+            try await Task.sleep(for: .milliseconds(120))
+            let image = try await screenshotService.captureSelection(in: rect)
+            isCaptureInProgress = false
+            editorViewModel.presentCapture(image: image)
+            editorWindowController.showEditor()
+        } catch {
+            isCaptureInProgress = false
+            editorWindowController.showEditor()
+
+            if CGPreflightScreenCaptureAccess() == false {
+                editorViewModel.updatePermissionState(.denied)
+                editorViewModel.notePermissionDenied()
+            } else {
+                editorViewModel.noteCaptureFailure(error.localizedDescription)
             }
         }
     }
