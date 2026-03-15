@@ -187,12 +187,7 @@ final class ScreenshotService {
         configuration.capturesAudio = false
         configuration.width = max(1, Int((segment.intersection.width * segment.screen.backingScaleFactor).rounded(.up)))
         configuration.height = max(1, Int((segment.intersection.height * segment.screen.backingScaleFactor).rounded(.up)))
-        configuration.sourceRect = CGRect(
-            x: segment.intersection.minX - segment.screen.frame.minX,
-            y: segment.intersection.minY - segment.screen.frame.minY,
-            width: segment.intersection.width,
-            height: segment.intersection.height
-        )
+        configuration.sourceRect = sourceRect(for: segment)
 
         let filter = SCContentFilter(display: segment.display, excludingWindows: [])
 
@@ -215,6 +210,17 @@ final class ScreenshotService {
 
     private func currentShareableContent() async throws -> SCShareableContent {
         try await SCShareableContent.current
+    }
+
+    private func sourceRect(for segment: CapturedSegment) -> CGRect {
+        // ScreenCaptureKit crops display capture in the display's local coordinate space.
+        // AppKit screen selection comes in with a bottom-left origin, so flip Y before capture.
+        CGRect(
+            x: segment.intersection.minX - segment.display.frame.minX,
+            y: segment.display.frame.maxY - segment.intersection.maxY,
+            width: segment.intersection.width,
+            height: segment.intersection.height
+        )
     }
 
     private func maximumScale(for screens: [NSScreen]) -> CGFloat {

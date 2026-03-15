@@ -15,6 +15,7 @@ final class CaptureCoordinator {
     private let screenshotService: ScreenshotService
     private let selectionOverlayWindow = SelectionOverlayWindow()
     private var isCaptureInProgress = false
+    private var isPermissionRequestInProgress = false
 
     init(
         editorViewModel: EditorViewModel,
@@ -39,6 +40,44 @@ final class CaptureCoordinator {
             return
         }
 
+        Task { @MainActor [weak self] in
+            await self?.requestAccessIfNeededAndBeginCapture()
+        }
+    }
+
+    private func requestAccessIfNeededAndBeginCapture() async {
+        if CGPreflightScreenCaptureAccess() {
+            editorViewModel.updatePermissionState(.granted)
+            editorViewModel.noteCaptureRequested()
+            beginSelectionFlow()
+            return
+        }
+
+        guard isPermissionRequestInProgress == false else {
+            editorWindowController.showEditor()
+            editorViewModel.updatePermissionState(.requesting)
+            editorViewModel.notePermissionRequestPending()
+            return
+        }
+
+        isPermissionRequestInProgress = true
+        editorWindowController.showEditor()
+        editorViewModel.updatePermissionState(.requesting)
+        editorViewModel.notePermissionRequestPending()
+
+        let granted = await Task.detached(priority: .userInitiated) {
+            CGRequestScreenCaptureAccess()
+        }.value
+
+        isPermissionRequestInProgress = false
+
+        guard granted else {
+            editorViewModel.updatePermissionState(.denied)
+            editorViewModel.notePermissionDenied()
+            return
+        }
+
+        editorViewModel.updatePermissionState(.granted)
         editorViewModel.noteCaptureRequested()
         beginSelectionFlow()
     }
