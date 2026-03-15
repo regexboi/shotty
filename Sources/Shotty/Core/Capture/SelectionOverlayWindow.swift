@@ -191,21 +191,29 @@ private final class Session {
 }
 
 private final class OverlayPanel: NSPanel {
-    let screenFrame: CGRect
-    let overlayView: OverlayView
+    private(set) var screenFrame: CGRect = .zero
+    private(set) var overlayView: OverlayView!
+
+    override init(
+        contentRect: NSRect,
+        styleMask style: NSWindow.StyleMask,
+        backing backingStoreType: NSWindow.BackingStoreType,
+        defer flag: Bool
+    ) {
+        super.init(contentRect: contentRect, styleMask: style, backing: backingStoreType, defer: flag)
+    }
 
     init(screen: NSScreen, session: Session) {
-        screenFrame = screen.frame
-        overlayView = OverlayView(frame: NSRect(origin: .zero, size: screen.frame.size), session: session, screenFrame: screen.frame)
-
         super.init(
             contentRect: screen.frame,
             styleMask: [.borderless],
             backing: .buffered,
-            defer: false,
-            screen: screen
+            defer: false
         )
 
+        screenFrame = screen.frame
+        overlayView = OverlayView(frame: NSRect(origin: .zero, size: screen.frame.size), session: session, screenFrame: screen.frame)
+        setFrame(screen.frame, display: false)
         isFloatingPanel = true
         level = NSWindow.Level(Int(CGShieldingWindowLevel()))
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
@@ -218,6 +226,11 @@ private final class OverlayPanel: NSPanel {
         animationBehavior = .none
         isMovable = false
         contentView = overlayView
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 
     override var canBecomeKey: Bool { true }

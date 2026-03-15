@@ -4,7 +4,7 @@ final class ShottyAppDelegate: NSObject, NSApplicationDelegate {
     private var shottyApplication: ShottyApplication?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
+        NSApp.setActivationPolicy(.accessory)
         NSWindow.allowsAutomaticWindowTabbing = false
 
         let application = ShottyApplication()

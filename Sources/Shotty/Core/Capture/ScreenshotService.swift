@@ -50,6 +50,30 @@ final class ScreenshotService {
         )
     }
 
+    func hasCaptureAccess() async -> Bool {
+        if CGPreflightScreenCaptureAccess() {
+            return true
+        }
+
+        do {
+            _ = try await currentShareableContent()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func looksLikePermissionFailure(_ error: Error) -> Bool {
+        let nsError = error as NSError
+        let description = "\(nsError.domain) \(nsError.localizedDescription)".lowercased()
+
+        return description.contains("permission")
+            || description.contains("screen recording")
+            || description.contains("not authorized")
+            || description.contains("not permitted")
+            || description.contains("access denied")
+    }
+
     @available(macOS 15.2, *)
     private func captureImageUsingDisplayAgnosticAPI(in rect: CGRect) async throws -> CGImage {
         try await withCheckedThrowingContinuation { continuation in

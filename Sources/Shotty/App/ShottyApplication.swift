@@ -3,6 +3,7 @@ import AppKit
 @MainActor
 final class ShottyApplication {
     private let editorViewModel = EditorViewModel()
+    private let statusItemController = ShottyStatusItemController()
     private lazy var editorWindowController = EditorWindowController(viewModel: editorViewModel)
     private lazy var screenshotService = ScreenshotService()
     private lazy var exportService = ExportService()
@@ -14,6 +15,7 @@ final class ShottyApplication {
     private lazy var hotkeyManager = HotkeyManager()
 
     func start() {
+        bindStatusItem()
         editorViewModel.bindExportService(exportService)
         captureCoordinator.prepareInitialExperience()
 
@@ -36,5 +38,23 @@ final class ShottyApplication {
 
     func reopenEditor() {
         editorWindowController.showEditor()
+    }
+
+    func beginCapture() {
+        captureCoordinator.beginCaptureFromHotkey()
+    }
+
+    private func bindStatusItem() {
+        statusItemController.onOpenEditor = { [weak self] in
+            self?.reopenEditor()
+        }
+
+        statusItemController.onCapture = { [weak self] in
+            self?.beginCapture()
+        }
+
+        statusItemController.onQuit = {
+            NSApp.terminate(nil)
+        }
     }
 }

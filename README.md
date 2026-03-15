@@ -33,10 +33,17 @@ Launch the built app executable:
 .build/xcode/Build/Products/Debug/Shotty
 ```
 
+Install a reusable app bundle to `/Applications`:
+
+```bash
+./scripts/install-app.sh
+```
+
 ## Phase 2 behavior
 
 - The editor window opens on launch as the working shell for later phases.
 - Press `Command` + `Shift` + `S` while Shotty is running to open the selection overlay.
+- Shotty runs as a menu bar utility, so it can stay resident without a Dock icon.
 - Drag a region on any active display, or across displays, to capture it.
 - Press `Esc` during selection to cancel with no capture.
 - If Screen Recording permission has not been granted yet, Shotty requests it and updates the editor status.
