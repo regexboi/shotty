@@ -4,12 +4,14 @@ struct EditorRootView: View {
     @ObservedObject var viewModel: EditorViewModel
 
     var body: some View {
-        HStack(spacing: 22) {
-            toolStrip
-            canvasColumn
+        VStack(alignment: .leading, spacing: 20) {
+            header
+            toolSwitcher
+            canvas
+            footer
         }
         .padding(24)
-        .frame(minWidth: 920, minHeight: 620)
+        .frame(minWidth: 980, minHeight: 720)
         .background(backgroundShell)
         .overlay(shellStroke)
         .onExitCommand {
@@ -17,165 +19,120 @@ struct EditorRootView: View {
         }
     }
 
-    private var toolStrip: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Shotty")
-                    .font(.system(size: 30, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.96))
+    private var header: some View {
+        HStack(alignment: .top, spacing: 18) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text("Shotty")
+                        .font(.system(size: 32, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.96))
 
-                Text("Minimal screenshot utility")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.6))
-            }
+                    Text(viewModel.canvasTitle)
+                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
 
-            VStack(spacing: 10) {
-                ForEach(AnnotationTool.allCases) { tool in
-                    Button {
-                        viewModel.selectTool(tool)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: tool.symbolName)
-                                .font(.system(size: 16, weight: .semibold))
-                                .frame(width: 20)
+                Text(viewModel.statusMessage)
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.7))
+                    .lineLimit(2)
 
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(tool.title)
-                                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                                Text(tool.shortDescription)
-                                    .font(.system(size: 11, weight: .medium, design: .rounded))
-                                    .foregroundStyle(.white.opacity(0.58))
-                            }
+                HStack(spacing: 10) {
+                    badge(
+                        title: viewModel.permissionBadgeTitle,
+                        tint: viewModel.permissionBadgeColor
+                    )
 
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.vertical, 10)
-                        .padding(.horizontal, 12)
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(ToolButtonStyle(isSelected: viewModel.document.selectedTool == tool))
+                    badge(
+                        title: viewModel.annotationCountLabel,
+                        tint: .white.opacity(0.8)
+                    )
+
+                    Text("Hotkey: Cmd + Shift + S")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.48))
                 }
             }
 
             Spacer(minLength: 0)
 
-            VStack(alignment: .leading, spacing: 10) {
-                actionButton("Copy Current Image", systemImage: "doc.on.doc") {
+            HStack(spacing: 10) {
+                commandButton("Undo", systemImage: "arrow.uturn.backward") {
+                    viewModel.undo()
+                }
+                .disabled(viewModel.canUndo == false)
+
+                commandButton("Redo", systemImage: "arrow.uturn.forward") {
+                    viewModel.redo()
+                }
+                .disabled(viewModel.canRedo == false)
+
+                commandButton("Copy Raw", systemImage: "doc.on.doc") {
                     viewModel.copyCurrentImageToPasteboard()
                 }
 
-                actionButton("Save Current Image", systemImage: "square.and.arrow.down") {
+                commandButton("Save Raw", systemImage: "square.and.arrow.down") {
                     viewModel.saveCurrentImage()
                 }
 
-                actionButton("Open Screen Recording Settings", systemImage: "gearshape") {
+                commandButton("Settings", systemImage: "gearshape") {
                     viewModel.openSystemSettings()
                 }
             }
         }
-        .frame(width: 268, alignment: .topLeading)
     }
 
-    private var canvasColumn: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(viewModel.canvasTitle)
-                        .font(.system(size: 26, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.96))
+    private var toolSwitcher: some View {
+        HStack(spacing: 12) {
+            ForEach(AnnotationTool.allCases) { tool in
+                Button {
+                    viewModel.selectTool(tool)
+                } label: {
+                    VStack(alignment: .leading, spacing: 5) {
+                        HStack(spacing: 8) {
+                            Image(systemName: tool.symbolName)
+                                .font(.system(size: 15, weight: .semibold))
 
-                    Text(viewModel.statusMessage)
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.68))
-                }
+                            Text(tool.title)
+                                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        }
 
-                Spacer()
-
-                VStack(alignment: .trailing, spacing: 8) {
-                    Text(viewModel.permissionBadgeTitle)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                        .padding(.vertical, 7)
-                        .padding(.horizontal, 10)
-                        .background(
-                            Capsule(style: .continuous)
-                                .fill(viewModel.permissionBadgeColor.opacity(0.18))
-                        )
-                        .overlay(
-                            Capsule(style: .continuous)
-                                .stroke(viewModel.permissionBadgeColor.opacity(0.32), lineWidth: 1)
-                        )
-
-                    Text("Hotkey: Cmd + Shift + S")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.52))
-                }
-            }
-
-            ZStack {
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                ShottyTheme.canvasBaseTop,
-                                ShottyTheme.canvasBaseBottom
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .strokeBorder(.white.opacity(0.1), lineWidth: 1)
-
-                if let capturedImage = viewModel.document.capturedImage {
-                    Image(nsImage: capturedImage.image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                        .padding(24)
-                } else {
-                    VStack(spacing: 14) {
-                        Image(systemName: "viewfinder.circle")
-                            .font(.system(size: 54, weight: .regular))
-                            .foregroundStyle(ShottyTheme.goldBright.opacity(0.9))
-
-                        Text("Capture preview lands here")
-                            .font(.system(size: 28, weight: .semibold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.94))
-
-                        Text("Launch the app, hit the global hotkey, and the selected screenshot will appear here.")
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.68))
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: 420)
+                        Text(tool.shortDescription)
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.56))
+                            .lineLimit(1)
                     }
-                    .padding(32)
+                    .padding(.vertical, 11)
+                    .padding(.horizontal, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .buttonStyle(ToolChipButtonStyle(isSelected: viewModel.document.selectedTool == tool))
             }
+        }
+    }
+
+    private var canvas: some View {
+        AnnotationCanvasView(viewModel: viewModel)
+            .id(viewModel.document.capturedImage?.captureRect.debugDescription ?? "empty-canvas")
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Capture Notes")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.84))
+    private var footer: some View {
+        HStack(spacing: 14) {
+            infoCard(
+                title: "Active Tool",
+                body: "\(viewModel.document.selectedTool.title). \(viewModel.selectedToolDescription)"
+            )
 
-                HStack(spacing: 12) {
-                    noteCard(
-                        title: "Editor shell",
-                        body: "Glassy SwiftUI workspace is live and hosted inside an AppKit window controller."
-                    )
+            infoCard(
+                title: viewModel.selectionStatusTitle,
+                body: viewModel.selectionStatusDetail
+            )
 
-                    noteCard(
-                        title: "Capture path",
-                        body: "The global hotkey now opens a real multi-display selection overlay and routes the resulting screenshot into the editor."
-                    )
-
-                    noteCard(
-                        title: "Keyboard",
-                        body: "Esc cancels capture or closes the editor shell. Copy/save currently export the raw captured image."
-                    )
-                }
-            }
+            infoCard(
+                title: viewModel.canUndo || viewModel.canRedo ? "History Ready" : "History Idle",
+                body: viewModel.historyStatusDetail
+            )
         }
     }
 
@@ -214,29 +171,41 @@ struct EditorRootView: View {
             )
     }
 
-    private func actionButton(
+    private func badge(title: String, tint: Color) -> some View {
+        Text(title)
+            .font(.system(size: 12, weight: .semibold, design: .rounded))
+            .padding(.vertical, 7)
+            .padding(.horizontal, 10)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(tint.opacity(0.16))
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(tint.opacity(0.32), lineWidth: 1)
+            )
+    }
+
+    private func commandButton(
         _ title: String,
         systemImage: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 Image(systemName: systemImage)
                     .font(.system(size: 13, weight: .semibold))
 
                 Text(title)
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
-
-                Spacer(minLength: 0)
             }
             .padding(.vertical, 10)
-            .padding(.horizontal, 12)
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 14)
         }
         .buttonStyle(SecondaryPillButtonStyle())
     }
 
-    private func noteCard(title: String, body: String) -> some View {
+    private func infoCard(title: String, body: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(title)
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
@@ -260,7 +229,7 @@ struct EditorRootView: View {
     }
 }
 
-private struct ToolButtonStyle: ButtonStyle {
+private struct ToolChipButtonStyle: ButtonStyle {
     let isSelected: Bool
 
     func makeBody(configuration: Configuration) -> some View {

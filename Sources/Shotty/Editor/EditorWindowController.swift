@@ -46,6 +46,15 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         window.onEscape = { [weak self] in
             self?.viewModel.handleEscape()
         }
+        window.onDelete = { [weak self] in
+            self?.viewModel.deleteSelectedAnnotation()
+        }
+        window.onUndo = { [weak self] in
+            self?.viewModel.undo()
+        }
+        window.onRedo = { [weak self] in
+            self?.viewModel.redo()
+        }
     }
 
     @available(*, unavailable)
@@ -70,11 +79,50 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
 
 private final class EditorPanel: NSPanel {
     var onEscape: (() -> Void)?
+    var onDelete: (() -> Void)?
+    var onUndo: (() -> Void)?
+    var onRedo: (() -> Void)?
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
     override func cancelOperation(_ sender: Any?) {
         onEscape?()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if shouldHandleEditorShortcutLocally,
+           event.modifierFlags.intersection(.deviceIndependentFlagsMask).isDisjoint(with: [.command, .shift, .option, .control]),
+           event.keyCode == 51 || event.keyCode == 117 {
+            onDelete?()
+            return
+        }
+
+        super.keyDown(with: event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        guard shouldHandleEditorShortcutLocally else {
+            return super.performKeyEquivalent(with: event)
+        }
+
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        let characters = event.charactersIgnoringModifiers?.lowercased()
+
+        if characters == "z", flags == [.command] {
+            onUndo?()
+            return true
+        }
+
+        if characters == "z", flags == [.command, .shift] {
+            onRedo?()
+            return true
+        }
+
+        return super.performKeyEquivalent(with: event)
+    }
+
+    private var shouldHandleEditorShortcutLocally: Bool {
+        (firstResponder is NSTextView) == false
     }
 }
