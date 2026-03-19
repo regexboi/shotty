@@ -303,7 +303,7 @@ struct EditorRootView: View {
     private var canvas: some View {
         NonDraggableHostingRegion {
             AnnotationCanvasView(viewModel: viewModel)
-                .id(viewModel.document.capturedImage?.captureRect.debugDescription ?? "empty-canvas")
+                .id(viewModel.document.capturedImage?.id.uuidString ?? "empty-canvas")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

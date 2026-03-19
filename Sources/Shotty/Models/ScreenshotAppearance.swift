@@ -17,6 +17,24 @@ struct ScreenshotAppearance: Equatable {
     var shadow: CGFloat = 28
     var balanceEnabled = true
 
+    init(
+        backgroundModeEnabled: Bool = false,
+        backgroundPreset: ScreenshotBackgroundPreset = .aurora,
+        padding: CGFloat = 88,
+        inset: CGFloat = 0,
+        cornerRadius: CGFloat = 22,
+        shadow: CGFloat = 28,
+        balanceEnabled: Bool = true
+    ) {
+        self.backgroundModeEnabled = backgroundModeEnabled
+        self.backgroundPreset = backgroundPreset
+        self.padding = padding
+        self.inset = inset
+        self.cornerRadius = cornerRadius
+        self.shadow = shadow
+        self.balanceEnabled = balanceEnabled
+    }
+
     var clampedPadding: CGFloat {
         CGFloat(min(max(Double(padding), Self.paddingRange.lowerBound), Self.paddingRange.upperBound))
     }
@@ -34,7 +52,7 @@ struct ScreenshotAppearance: Equatable {
     }
 }
 
-enum ScreenshotBackgroundPreset: String, CaseIterable, Identifiable {
+enum ScreenshotBackgroundPreset: String, Codable, CaseIterable, Identifiable {
     case aurora
     case daybreak
     case lagoon

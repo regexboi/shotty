@@ -7,6 +7,7 @@ final class ShottyApplication {
     private lazy var editorWindowController = EditorWindowController(viewModel: editorViewModel)
     private lazy var screenshotService = ScreenshotService()
     private lazy var exportService = ExportService()
+    private lazy var settingsStore = EditorSettingsStore()
     private lazy var captureCoordinator = CaptureCoordinator(
         editorViewModel: editorViewModel,
         editorWindowController: editorWindowController,
@@ -17,6 +18,7 @@ final class ShottyApplication {
     func start() {
         bindStatusItem()
         editorViewModel.bindExportService(exportService)
+        editorViewModel.bindSettingsStore(settingsStore)
         captureCoordinator.prepareInitialExperience()
 
         do {

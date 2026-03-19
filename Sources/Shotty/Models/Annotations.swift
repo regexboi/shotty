@@ -3,7 +3,7 @@ import CoreGraphics
 import Foundation
 import SwiftUI
 
-enum AnnotationTool: String, CaseIterable, Identifiable {
+enum AnnotationTool: String, Codable, CaseIterable, Identifiable {
     case text
     case pencil
     case rectangle
@@ -203,7 +203,7 @@ enum AnnotationSizePreset: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-struct AnnotationToolStyle: Equatable {
+struct AnnotationToolStyle: Codable, Equatable {
     var colorToken: AnnotationColorToken
     var sizePreset: AnnotationSizePreset
 

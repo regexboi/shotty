@@ -21,6 +21,7 @@ final class EditorViewModel: ObservableObject {
     var onRequestClose: (() -> Void)?
     weak var windowProvider: EditorWindowController?
     private var exportService: ExportService?
+    private var settingsStore: EditorSettingsStore?
     private var undoStack: [EditorHistoryState] = []
     private var redoStack: [EditorHistoryState] = []
 
@@ -141,6 +142,16 @@ final class EditorViewModel: ObservableObject {
         self.exportService = exportService
     }
 
+    func bindSettingsStore(_ settingsStore: EditorSettingsStore) {
+        self.settingsStore = settingsStore
+
+        guard let persistedSettings = try? settingsStore.load() else {
+            return
+        }
+
+        applyPersistedSettings(persistedSettings)
+    }
+
     func loadInitialState(permissionState: CaptureCoordinator.PermissionState) {
         self.permissionState = permissionState
         statusMessage = "Editor shell is live. Press Cmd + Shift + S to launch the region capture overlay."
@@ -217,11 +228,13 @@ final class EditorViewModel: ObservableObject {
             textEditingAnnotationID = nil
         }
 
+        persistEditorSettings()
         statusMessage = "\(tool.title) selected. \(tool.shortDescription)"
     }
 
     func setBackgroundModeEnabled(_ isEnabled: Bool) {
         document.appearance.backgroundModeEnabled = isEnabled
+        persistEditorSettings()
         statusMessage = isEnabled
             ? "Background mode enabled."
             : "Background mode disabled."
@@ -229,11 +242,13 @@ final class EditorViewModel: ObservableObject {
 
     func selectBackgroundPreset(_ preset: ScreenshotBackgroundPreset) {
         document.appearance.backgroundPreset = preset
+        persistEditorSettings()
         statusMessage = "\(preset.title) background selected."
     }
 
     func setBalanceEnabled(_ isEnabled: Bool) {
         document.appearance.balanceEnabled = isEnabled
+        persistEditorSettings()
         statusMessage = isEnabled
             ? "Automatic balance enabled."
             : "Automatic balance disabled."
@@ -241,18 +256,22 @@ final class EditorViewModel: ObservableObject {
 
     func setBackgroundPadding(_ value: CGFloat) {
         document.appearance.padding = value
+        persistEditorSettings()
     }
 
     func setImageInset(_ value: CGFloat) {
         document.appearance.inset = value
+        persistEditorSettings()
     }
 
     func setImageCornerRadius(_ value: CGFloat) {
         document.appearance.cornerRadius = value
+        persistEditorSettings()
     }
 
     func setImageShadow(_ value: CGFloat) {
         document.appearance.shadow = value
+        persistEditorSettings()
     }
 
     func copyCurrentImageToPasteboard() {
@@ -315,6 +334,7 @@ final class EditorViewModel: ObservableObject {
         updateStyle(for: document.selectedTool) { style in
             style.colorToken = color
         }
+        persistEditorSettings()
         statusMessage = "\(document.selectedTool.title) color updated."
     }
 
@@ -322,6 +342,7 @@ final class EditorViewModel: ObservableObject {
         updateStyle(for: document.selectedTool) { style in
             style.sizePreset = sizePreset
         }
+        persistEditorSettings()
         statusMessage = "\(document.selectedTool.title) size set to \(sizePreset.title.uppercased())."
     }
 
@@ -467,6 +488,46 @@ final class EditorViewModel: ObservableObject {
         mutate(&style)
         nextStyles[tool] = style
         toolStyles = nextStyles
+    }
+
+    private func applyPersistedSettings(_ persistedSettings: PersistedEditorSettings) {
+        document.selectedTool = persistedSettings.selectedTool
+        document.appearance = persistedSettings.appearance.screenshotAppearance
+
+        var mergedToolStyles = Self.makeDefaultToolStyles()
+        for tool in AnnotationTool.allCases {
+            if let persistedStyle = persistedSettings.toolStyles[tool.rawValue] {
+                mergedToolStyles[tool] = persistedStyle.annotationToolStyle
+            }
+        }
+        toolStyles = mergedToolStyles
+    }
+
+    private func persistEditorSettings() {
+        guard let settingsStore else { return }
+
+        do {
+            try settingsStore.save(
+                PersistedEditorSettings(
+                    selectedTool: document.selectedTool,
+                    appearance: PersistedScreenshotAppearance(appearance: document.appearance),
+                    toolStyles: toolStyles.reduce(into: [:]) { partialResult, entry in
+                        partialResult[entry.key.rawValue] = PersistedAnnotationToolStyle(style: entry.value)
+                    }
+                )
+            )
+        } catch {
+            print("Failed to persist editor settings: \(error.localizedDescription)")
+        }
+    }
+
+    private static func makeDefaultToolStyles() -> [AnnotationTool: AnnotationToolStyle] {
+        AnnotationTool.allCases.reduce(into: [:]) { styles, tool in
+            styles[tool] = AnnotationToolStyle(
+                colorToken: tool.defaultColorToken,
+                sizePreset: tool.defaultSizePreset
+            )
+        }
     }
 
     private var currentHistoryState: EditorHistoryState {
