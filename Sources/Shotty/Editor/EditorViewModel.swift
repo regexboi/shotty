@@ -196,15 +196,15 @@ final class EditorViewModel: ObservableObject {
 
     func copyCurrentImageToPasteboard() {
         if exportService?.copyCurrentImage(document: document) == true {
-            statusMessage = "Raw captured image copied to the pasteboard. Annotation flattening lands in Phase 4."
+            statusMessage = "Current annotated image copied to the pasteboard."
         } else {
-            statusMessage = "Capture an image first, then copy will export the current raw capture."
+            statusMessage = "Capture an image first, then copy will export the current editor image."
         }
     }
 
     func saveCurrentImage() {
         if exportService?.showSavePanel(for: document, from: windowProvider?.window) == true {
-            statusMessage = "Save panel opened for the raw captured image. Annotation flattening lands in Phase 4."
+            statusMessage = "Save panel opened for the current annotated image."
         } else {
             statusMessage = "There is no image to save yet. Capture something first."
         }

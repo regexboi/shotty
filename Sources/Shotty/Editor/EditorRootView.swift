@@ -67,11 +67,11 @@ struct EditorRootView: View {
                 }
                 .disabled(viewModel.canRedo == false)
 
-                commandButton("Copy Raw", systemImage: "doc.on.doc") {
+                commandButton("Copy", systemImage: "doc.on.doc") {
                     viewModel.copyCurrentImageToPasteboard()
                 }
 
-                commandButton("Save Raw", systemImage: "square.and.arrow.down") {
+                commandButton("Save", systemImage: "square.and.arrow.down") {
                     viewModel.saveCurrentImage()
                 }
 

@@ -20,7 +20,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         window.delegate = self
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = true
+        window.isMovableByWindowBackground = false
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = true
