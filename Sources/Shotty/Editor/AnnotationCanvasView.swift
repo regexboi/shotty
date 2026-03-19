@@ -39,15 +39,25 @@ struct AnnotationCanvasView: View {
         VStack(spacing: 14) {
             Image(systemName: "viewfinder.circle")
                 .font(.system(size: 54, weight: .regular))
-                .foregroundStyle(ShottyTheme.pinkBright.opacity(0.92))
+                .foregroundStyle(
+                    LinearGradient(
+                        colors: [
+                            ShottyTheme.goldBright,
+                            ShottyTheme.pinkBright.opacity(0.92)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .shadow(color: ShottyTheme.gold.opacity(0.22), radius: 18, x: 0, y: 8)
 
             Text("Capture preview lands here")
                 .font(.system(size: 28, weight: .semibold, design: .rounded))
-                .foregroundStyle(ShottyTheme.lavender)
+                .foregroundStyle(ShottyTheme.goldBright)
 
             Text("Launch the app, hit the global hotkey, and the selected screenshot will appear here.")
                 .font(.system(size: 15, weight: .medium, design: .rounded))
-                .foregroundStyle(ShottyTheme.lavenderDim.opacity(0.88))
+                .foregroundStyle(ShottyTheme.blueBright.opacity(0.90))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
         }

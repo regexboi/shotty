@@ -4,6 +4,7 @@ import SwiftUI
 struct EditorRootView: View {
     @ObservedObject var viewModel: EditorViewModel
     @State private var showsToolControls = false
+    private let shellCornerRadius: CGFloat = 26
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -78,27 +79,43 @@ struct EditorRootView: View {
     private var toolSwitcher: some View {
         HStack(spacing: 12) {
             ForEach(AnnotationTool.allCases) { tool in
+                let isSelected = viewModel.document.selectedTool == tool
+
                 Button {
                     viewModel.selectTool(tool)
                 } label: {
                     HStack(spacing: 10) {
                         Image(systemName: tool.symbolName)
                             .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(
+                                isSelected
+                                    ? ShottyTheme.goldBright
+                                    : ShottyTheme.gold.opacity(0.88)
+                            )
 
                         Text(tool.title)
                             .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .foregroundStyle(
+                                isSelected
+                                    ? ShottyTheme.goldBright
+                                    : ShottyTheme.lavender.opacity(0.94)
+                            )
                             .lineLimit(1)
 
                         Text("[\(tool.shortcutIndex)]")
                             .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.46))
+                            .foregroundStyle(
+                                isSelected
+                                    ? ShottyTheme.goldBright.opacity(0.96)
+                                    : ShottyTheme.lavenderDim.opacity(0.78)
+                            )
                             .fixedSize()
                     }
                     .padding(.vertical, 10)
                     .padding(.horizontal, 13)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .buttonStyle(ToolChipButtonStyle(isSelected: viewModel.document.selectedTool == tool))
+                .buttonStyle(ToolChipButtonStyle(isSelected: isSelected))
             }
         }
     }
@@ -108,7 +125,7 @@ struct EditorRootView: View {
             HStack(spacing: 10) {
                 Text("Color")
                     .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(ShottyTheme.lavenderDim)
+                    .foregroundStyle(ShottyTheme.goldBright.opacity(0.94))
 
                 HStack(spacing: 8) {
                     ForEach(AnnotationColorToken.allCases, id: \.rawValue) { color in
@@ -128,7 +145,7 @@ struct EditorRootView: View {
             HStack(spacing: 10) {
                 Text(viewModel.document.selectedTool == .text ? "Font" : "Size")
                     .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .foregroundStyle(ShottyTheme.lavenderDim)
+                    .foregroundStyle(ShottyTheme.goldBright.opacity(0.94))
 
                 HStack(spacing: 8) {
                     ForEach(AnnotationSizePreset.allCases) { sizePreset in
@@ -158,39 +175,111 @@ struct EditorRootView: View {
     }
 
     private var backgroundShell: some View {
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .fill(.ultraThinMaterial)
-            .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                ShottyTheme.shellTop.opacity(0.96),
-                                ShottyTheme.surfaceRaised.opacity(0.92),
-                                ShottyTheme.shellBottom.opacity(0.94)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+        ZStack {
+            RoundedRectangle(cornerRadius: shellCornerRadius, style: .continuous)
+                .fill(.ultraThinMaterial)
+
+            RoundedRectangle(cornerRadius: shellCornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            ShottyTheme.shellTop.opacity(0.76),
+                            ShottyTheme.surfaceRaised.opacity(0.28),
+                            ShottyTheme.shellBottom.opacity(0.74)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .shadow(color: .black.opacity(0.22), radius: 30, x: 0, y: 18)
+                )
+
+            RoundedRectangle(cornerRadius: shellCornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            ShottyTheme.surfaceDeep.opacity(0.44),
+                            Color.clear,
+                            ShottyTheme.surfaceDeep.opacity(0.32)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+
+            RoundedRectangle(cornerRadius: shellCornerRadius, style: .continuous)
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            ShottyTheme.goldBright.opacity(0.08),
+                            Color.clear
+                        ],
+                        center: .topTrailing,
+                        startRadius: 18,
+                        endRadius: 260
+                    )
+                )
+
+            RoundedRectangle(cornerRadius: shellCornerRadius, style: .continuous)
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            ShottyTheme.cyanBright.opacity(0.05),
+                            Color.clear
+                        ],
+                        center: .bottomLeading,
+                        startRadius: 14,
+                        endRadius: 240
+                    )
+                )
+
+            RoundedRectangle(cornerRadius: shellCornerRadius, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.11),
+                            Color.white.opacity(0.03),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .center
+                    )
+                )
+                .blendMode(.screen)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: shellCornerRadius, style: .continuous))
+        .shadow(color: ShottyTheme.purpleAccent.opacity(0.16), radius: 28, x: 0, y: 14)
+        .shadow(color: .black.opacity(0.16), radius: 44, x: 0, y: 22)
     }
 
     private var shellStroke: some View {
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
+        RoundedRectangle(cornerRadius: shellCornerRadius, style: .continuous)
             .strokeBorder(
                 LinearGradient(
                     colors: [
-                        ShottyTheme.purpleBright.opacity(0.5),
-                        ShottyTheme.surfaceLine.opacity(0.42)
+                        Color.white.opacity(0.30),
+                        ShottyTheme.goldBright.opacity(0.22),
+                        ShottyTheme.surfaceLine.opacity(0.30),
+                        ShottyTheme.purpleBright.opacity(0.26)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ),
                 lineWidth: 1
             )
+            .overlay {
+                RoundedRectangle(cornerRadius: shellCornerRadius - 1, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                Color.white.opacity(0.10),
+                                Color.clear,
+                                ShottyTheme.gold.opacity(0.08)
+                            ],
+                            startPoint: .top,
+                            endPoint: .bottom
+                        ),
+                        lineWidth: 1
+                    )
+            }
     }
 
     private func iconCommandButton(
@@ -253,23 +342,28 @@ private struct ToolChipButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(ShottyTheme.lavender.opacity(configuration.isPressed ? 0.9 : 0.98))
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(
                         isSelected
-                            ? ShottyTheme.purpleBright.opacity(configuration.isPressed ? 0.34 : 0.26)
-                            : ShottyTheme.surfaceRaised.opacity(configuration.isPressed ? 0.92 : 0.8)
+                            ? ShottyTheme.purpleBright.opacity(configuration.isPressed ? 0.28 : 0.18)
+                            : Color.white.opacity(configuration.isPressed ? 0.09 : 0.05)
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(
                         isSelected
-                            ? ShottyTheme.purpleBright.opacity(0.72)
-                            : ShottyTheme.surfaceLine.opacity(0.74),
+                            ? ShottyTheme.goldBright.opacity(0.78)
+                            : Color.white.opacity(0.12),
                         lineWidth: 1
                     )
+            )
+            .shadow(
+                color: isSelected ? ShottyTheme.gold.opacity(0.18) : .clear,
+                radius: 16,
+                x: 0,
+                y: 8
             )
     }
 }
@@ -277,15 +371,16 @@ private struct ToolChipButtonStyle: ButtonStyle {
 private struct SecondaryPillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(ShottyTheme.lavender.opacity(configuration.isPressed ? 0.84 : 0.94))
+            .foregroundStyle(ShottyTheme.goldBright.opacity(configuration.isPressed ? 0.82 : 0.96))
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(ShottyTheme.surfaceRaised.opacity(configuration.isPressed ? 0.96 : 0.84))
+                    .fill(Color.white.opacity(configuration.isPressed ? 0.09 : 0.06))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(ShottyTheme.surfaceLine.opacity(0.72), lineWidth: 1)
+                    .strokeBorder(Color.white.opacity(0.14), lineWidth: 1)
             )
+            .shadow(color: ShottyTheme.gold.opacity(0.10), radius: 12, x: 0, y: 6)
     }
 }
 
@@ -299,16 +394,16 @@ private struct ColorSwatchButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(
                         isSelected
-                            ? ShottyTheme.surfaceRaised.opacity(0.98)
-                            : ShottyTheme.surface.opacity(configuration.isPressed ? 0.95 : 0.8)
+                            ? Color.white.opacity(0.13)
+                            : Color.white.opacity(configuration.isPressed ? 0.09 : 0.05)
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(
                         isSelected
-                            ? ShottyTheme.purpleBright.opacity(0.78)
-                            : ShottyTheme.surfaceLine.opacity(0.66),
+                            ? ShottyTheme.goldBright.opacity(0.82)
+                            : Color.white.opacity(0.12),
                         lineWidth: isSelected ? 1.5 : 1
                     )
             )
@@ -322,7 +417,7 @@ private struct SizeChipButtonStyle: ButtonStyle {
         configuration.label
             .foregroundStyle(
                 isSelected
-                    ? Color.white.opacity(configuration.isPressed ? 0.92 : 0.98)
+                    ? ShottyTheme.goldBright.opacity(configuration.isPressed ? 0.90 : 0.98)
                     : ShottyTheme.lavender.opacity(configuration.isPressed ? 0.84 : 0.94)
             )
             .padding(.horizontal, 10)
@@ -331,16 +426,16 @@ private struct SizeChipButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(
                         isSelected
-                            ? ShottyTheme.purpleBright.opacity(configuration.isPressed ? 0.74 : 0.62)
-                            : ShottyTheme.surfaceRaised.opacity(configuration.isPressed ? 0.96 : 0.84)
+                            ? ShottyTheme.gold.opacity(configuration.isPressed ? 0.22 : 0.16)
+                            : Color.white.opacity(configuration.isPressed ? 0.09 : 0.05)
                     )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .strokeBorder(
                         isSelected
-                            ? ShottyTheme.pinkBright.opacity(0.74)
-                            : ShottyTheme.surfaceLine.opacity(0.72),
+                            ? ShottyTheme.goldBright.opacity(0.84)
+                            : Color.white.opacity(0.12),
                         lineWidth: 1
                     )
             )
@@ -355,11 +450,16 @@ private struct PermissionPillButtonStyle: ButtonStyle {
             .foregroundStyle(.white.opacity(configuration.isPressed ? 0.86 : 0.96))
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(tint.opacity(configuration.isPressed ? 0.42 : 0.28))
+                    .fill(.thinMaterial)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(tint.opacity(configuration.isPressed ? 0.24 : 0.18))
+                    )
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(tint.opacity(0.62), lineWidth: 1)
             )
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

@@ -8,10 +8,12 @@ enum ShottyTheme {
 
     static let purple = Color(red: 0.482, green: 0.369, blue: 1.000)
     static let purpleBright = Color(red: 0.706, green: 0.302, blue: 1.000)
+    static let purpleAccent = Color(red: 0.706, green: 0.302, blue: 1.000)
     static let pinkBright = Color(red: 1.000, green: 0.349, blue: 0.839)
+    static let blueBright = Color(red: 0.349, green: 0.722, blue: 1.000)
     static let cyanBright = Color(red: 0.000, green: 0.898, blue: 1.000)
     static let lavender = Color(red: 0.910, green: 0.878, blue: 0.941)
-    static let lavenderDim = Color(red: 0.769, green: 0.710, blue: 0.831)
+    static let lavenderDim = Color(red: 0.655, green: 0.545, blue: 0.980)
     static let gold = Color(red: 1.000, green: 0.855, blue: 0.271)
     static let goldBright = Color(red: 1.000, green: 0.910, blue: 0.478)
 
