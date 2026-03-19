@@ -1,5 +1,9 @@
 # Shotty
 
+<p align="center">
+  <img src="./logo.png" alt="Shotty logo" width="220" />
+</p>
+
 Shotty is a native macOS screenshot utility being built in phases. Phase 2 is now in place, which means the global shortcut launches a real region-selection overlay and routes an actual screenshot into the editor window.
 
 ## Current status
