@@ -14,21 +14,6 @@ struct AnnotationCanvasView: View {
             let containerSize = proxy.size
 
             ZStack {
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                ShottyTheme.canvasBaseTop,
-                                ShottyTheme.canvasBaseBottom
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .strokeBorder(.white.opacity(0.1), lineWidth: 1)
-
                 if let capturedImage = viewModel.document.capturedImage {
                     let layout = CanvasLayout(
                         containerSize: containerSize,
@@ -54,18 +39,19 @@ struct AnnotationCanvasView: View {
         VStack(spacing: 14) {
             Image(systemName: "viewfinder.circle")
                 .font(.system(size: 54, weight: .regular))
-                .foregroundStyle(ShottyTheme.goldBright.opacity(0.9))
+                .foregroundStyle(ShottyTheme.pinkBright.opacity(0.92))
 
             Text("Capture preview lands here")
                 .font(.system(size: 28, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.94))
+                .foregroundStyle(ShottyTheme.lavender)
 
             Text("Launch the app, hit the global hotkey, and the selected screenshot will appear here.")
                 .font(.system(size: 15, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.68))
+                .foregroundStyle(ShottyTheme.lavenderDim.opacity(0.88))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 420)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         .padding(32)
     }
 
@@ -79,7 +65,7 @@ struct AnnotationCanvasView: View {
                 .resizable()
                 .interpolation(.high)
                 .frame(width: layout.imageRect.width, height: layout.imageRect.height)
-                .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .position(x: layout.imageRect.midX, y: layout.imageRect.midY)
 
             annotationDrawingLayer(layout: layout)
@@ -91,8 +77,7 @@ struct AnnotationCanvasView: View {
                 textOverlay(for: annotation, layout: layout)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .contentShape(Rectangle())
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     private func annotationDrawingLayer(layout: CanvasLayout) -> some View {
@@ -107,9 +92,6 @@ struct AnnotationCanvasView: View {
                 draw(draftSnapshot, in: &context)
             }
 
-            if let selectedAnnotation = viewModel.selectedAnnotation {
-                drawSelection(for: selectedAnnotation, in: &context, scale: layout.scale)
-            }
         }
     }
 
@@ -119,8 +101,8 @@ struct AnnotationCanvasView: View {
         layout: CanvasLayout
     ) -> some View {
         let textRect = layout.viewRect(from: annotation.textBounds)
-        let editorWidth = max(textRect.width + (28 * layout.scale), 180 * layout.scale)
-        let editorHeight = max(textRect.height + (14 * layout.scale), 40 * layout.scale)
+        let editorWidth = max(textRect.width, 120 * layout.scale)
+        let editorHeight = max(textRect.height, annotation.fontSize * layout.scale * 1.2)
 
         if viewModel.textEditingAnnotationID == annotation.id {
             InlineAnnotationTextField(
@@ -132,15 +114,7 @@ struct AnnotationCanvasView: View {
             )
             .id(textEditorSessionID)
             .frame(width: editorWidth, height: editorHeight, alignment: .topLeading)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial.opacity(0.92))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(.white.opacity(0.22), lineWidth: 1)
-            )
-            .offset(x: textRect.minX - (10 * layout.scale), y: textRect.minY - (6 * layout.scale))
+            .offset(x: textRect.minX, y: textRect.minY)
         } else {
             Text(annotation.text)
                 .font(.system(size: annotation.fontSize * layout.scale, weight: .semibold, design: .rounded))
@@ -249,18 +223,24 @@ struct AnnotationCanvasView: View {
         case .text:
             return
         case .pencil, .highlight:
+            let style = viewModel.currentToolStyle
             if draftAnnotation == nil {
                 draftAnnotation = .stroke(
                     tool: viewModel.document.selectedTool,
+                    color: style.colorToken,
+                    lineWidth: style.sizePreset.lineWidth(for: viewModel.document.selectedTool),
                     points: [start, current]
                 )
                 return
             }
 
             draftAnnotation?.append(point: current)
-        case .rectangle, .circle:
+        case .rectangle, .circle, .arrow:
+            let style = viewModel.currentToolStyle
             draftAnnotation = .shape(
                 tool: viewModel.document.selectedTool,
+                color: style.colorToken,
+                lineWidth: style.sizePreset.lineWidth(for: viewModel.document.selectedTool),
                 start: start,
                 current: current
             )
@@ -361,40 +341,17 @@ struct AnnotationCanvasView: View {
                 )
             )
             context.blendMode = .normal
-        }
-    }
-
-    private func drawSelection(
-        for annotation: AnnotationSnapshot,
-        in context: inout GraphicsContext,
-        scale: CGFloat
-    ) {
-        let selectionRect = annotation.selectionBounds
-        let lineWidth = max(2 / max(scale, 0.01), 0.75)
-        let dashPattern = [10 / max(scale, 0.01), 6 / max(scale, 0.01)]
-        let selectionPath: Path
-
-        switch annotation {
-        case .ellipse:
-            selectionPath = Path(ellipseIn: selectionRect)
-        default:
-            selectionPath = Path(selectionRect)
-        }
-
-        context.fill(
-            selectionPath,
-            with: .color(.white.opacity(0.05))
-        )
-        context.stroke(
-            selectionPath,
-            with: .color(.white.opacity(0.92)),
-            style: StrokeStyle(
-                lineWidth: lineWidth,
-                lineCap: .round,
-                lineJoin: .round,
-                dash: dashPattern
+        case let .arrow(arrowAnnotation):
+            context.stroke(
+                Path(arrowPath(from: arrowAnnotation.start, to: arrowAnnotation.end, lineWidth: arrowAnnotation.lineWidth)),
+                with: .color(arrowAnnotation.color.color),
+                style: StrokeStyle(
+                    lineWidth: arrowAnnotation.lineWidth,
+                    lineCap: .round,
+                    lineJoin: .round
+                )
             )
-        )
+        }
     }
 }
 
@@ -446,26 +403,28 @@ private struct GestureSession {
 }
 
 private enum DraftAnnotation {
-    case stroke(tool: AnnotationTool, points: [CGPoint])
-    case shape(tool: AnnotationTool, start: CGPoint, current: CGPoint)
+    case stroke(tool: AnnotationTool, color: AnnotationColorToken, lineWidth: CGFloat, points: [CGPoint])
+    case shape(tool: AnnotationTool, color: AnnotationColorToken, lineWidth: CGFloat, start: CGPoint, current: CGPoint)
 
     var snapshot: AnnotationSnapshot? {
         switch self {
-        case let .stroke(tool, points):
+        case let .stroke(tool, color, lineWidth, points):
             switch tool {
             case .pencil:
-                return AnnotationSnapshot.makePath(points: points)
+                return AnnotationSnapshot.makePath(points: points, color: color, lineWidth: lineWidth)
             case .highlight:
-                return AnnotationSnapshot.makeHighlight(points: points)
+                return AnnotationSnapshot.makeHighlight(points: points, color: color, lineWidth: lineWidth)
             default:
                 return nil
             }
-        case let .shape(tool, start, current):
+        case let .shape(tool, color, lineWidth, start, current):
             switch tool {
             case .rectangle:
-                return AnnotationSnapshot.makeRectangle(from: start, to: current)
+                return AnnotationSnapshot.makeRectangle(from: start, to: current, color: color, lineWidth: lineWidth)
             case .circle:
-                return AnnotationSnapshot.makeEllipse(from: start, to: current)
+                return AnnotationSnapshot.makeEllipse(from: start, to: current, color: color, lineWidth: lineWidth)
+            case .arrow:
+                return AnnotationSnapshot.makeArrow(from: start, to: current, color: color, lineWidth: lineWidth)
             default:
                 return nil
             }
@@ -473,7 +432,7 @@ private enum DraftAnnotation {
     }
 
     mutating func append(point: CGPoint) {
-        guard case let .stroke(tool, existingPoints) = self else { return }
+        guard case let .stroke(tool, color, lineWidth, existingPoints) = self else { return }
         var points = existingPoints
 
         if let lastPoint = points.last,
@@ -482,7 +441,7 @@ private enum DraftAnnotation {
         }
 
         points.append(point)
-        self = .stroke(tool: tool, points: points)
+        self = .stroke(tool: tool, color: color, lineWidth: lineWidth, points: points)
     }
 }
 

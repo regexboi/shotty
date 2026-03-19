@@ -20,7 +20,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         window.delegate = self
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = false
+        window.isMovableByWindowBackground = true
         window.isOpaque = false
         window.backgroundColor = .clear
         window.hasShadow = true
@@ -33,7 +33,7 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         let rootView = EditorRootView(viewModel: viewModel)
         let hostingController = NSHostingController(rootView: rootView)
         hostingController.view.wantsLayer = true
-        hostingController.view.layer?.cornerRadius = 32
+        hostingController.view.layer?.cornerRadius = 22
         hostingController.view.layer?.masksToBounds = false
         window.contentViewController = hostingController
         window.setFrameAutosaveName("ShottyEditorWindow")
@@ -60,6 +60,9 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         }
         window.onSave = { [weak self] in
             self?.viewModel.saveCurrentImage()
+        }
+        window.onSelectTool = { [weak self] tool in
+            self?.viewModel.selectTool(tool)
         }
     }
 
@@ -90,6 +93,7 @@ private final class EditorPanel: NSPanel {
     var onRedo: (() -> Void)?
     var onCopy: (() -> Void)?
     var onSave: (() -> Void)?
+    var onSelectTool: ((AnnotationTool) -> Void)?
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
@@ -101,9 +105,16 @@ private final class EditorPanel: NSPanel {
     override func keyDown(with event: NSEvent) {
         if shouldHandleEditorShortcutLocally,
            event.modifierFlags.intersection(.deviceIndependentFlagsMask).isDisjoint(with: [.command, .shift, .option, .control]),
-           event.keyCode == 51 || event.keyCode == 117 {
-            onDelete?()
-            return
+           let characters = event.charactersIgnoringModifiers {
+            if event.keyCode == 51 || event.keyCode == 117 {
+                onDelete?()
+                return
+            }
+
+            if let tool = tool(forShortcutCharacters: characters) {
+                onSelectTool?(tool)
+                return
+            }
         }
 
         super.keyDown(with: event)
@@ -142,5 +153,24 @@ private final class EditorPanel: NSPanel {
 
     private var shouldHandleEditorShortcutLocally: Bool {
         (firstResponder is NSTextView) == false
+    }
+
+    private func tool(forShortcutCharacters characters: String) -> AnnotationTool? {
+        switch characters {
+        case "1":
+            return .text
+        case "2":
+            return .pencil
+        case "3":
+            return .rectangle
+        case "4":
+            return .circle
+        case "5":
+            return .highlight
+        case "6":
+            return .arrow
+        default:
+            return nil
+        }
     }
 }

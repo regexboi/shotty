@@ -215,6 +215,13 @@ final class ExportService {
                 blendMode: .multiply,
                 in: context
             )
+        case let .arrow(arrowAnnotation):
+            let path = NSBezierPath(cgPath: arrowPath(from: arrowAnnotation.start, to: arrowAnnotation.end, lineWidth: arrowAnnotation.lineWidth))
+            path.lineWidth = arrowAnnotation.lineWidth
+            path.lineCapStyle = .round
+            path.lineJoinStyle = .round
+            arrowAnnotation.color.nsColor.setStroke()
+            path.stroke()
         }
     }
 

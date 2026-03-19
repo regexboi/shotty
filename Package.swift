@@ -16,6 +16,9 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Shotty",
+            resources: [
+                .process("Resources")
+            ],
             linkerSettings: [
                 .linkedFramework("AppKit"),
                 .linkedFramework("Carbon"),

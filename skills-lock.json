@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "peekaboo": {
+      "source": "steipete/clawdis",
+      "sourceType": "github",
+      "computedHash": "904404fca6618cbf0ccf87c1a18a40e779c5c6ddf46f6c59884cd8d3b0f07b9c"
+    }
+  }
+}

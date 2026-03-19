@@ -33,12 +33,7 @@ final class ScreenshotService {
             throw CaptureError.selectionMissingDisplay
         }
 
-        let image: CGImage
-        if #available(macOS 15.2, *) {
-            image = try await captureImageUsingDisplayAgnosticAPI(in: selection)
-        } else {
-            image = try await captureImageByCompositingDisplays(in: selection, screens: intersectingScreens)
-        }
+        let image = try await captureImageByCompositingDisplays(in: selection, screens: intersectingScreens)
 
         let preferredScale = maximumScale(for: intersectingScreens)
         let nsImage = NSImage(cgImage: image, size: NSSize(width: selection.width, height: selection.height))
@@ -74,25 +69,6 @@ final class ScreenshotService {
             || description.contains("access denied")
     }
 
-    @available(macOS 15.2, *)
-    private func captureImageUsingDisplayAgnosticAPI(in rect: CGRect) async throws -> CGImage {
-        try await withCheckedThrowingContinuation { continuation in
-            SCScreenshotManager.captureImage(in: rect) { image, error in
-                if let error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-
-                guard let image else {
-                    continuation.resume(throwing: CaptureError.captureUnavailable)
-                    return
-                }
-
-                continuation.resume(returning: image)
-            }
-        }
-    }
-
     private func captureImageByCompositingDisplays(
         in rect: CGRect,
         screens: [NSScreen]
@@ -108,15 +84,15 @@ final class ScreenshotService {
                 return lhs.frame.minY < rhs.frame.minY
             }
             .compactMap { screen -> CapturedSegment? in
-                let intersection = rect.intersection(screen.frame)
-                guard intersection.isNull == false, intersection.isEmpty == false else { return nil }
-
                 guard
                     let displayID = screen.displayID,
                     let display = displaysByID[displayID]
                 else {
                     return nil
                 }
+
+                let intersection = rect.intersection(display.frame)
+                guard intersection.isNull == false, intersection.isEmpty == false else { return nil }
 
                 return CapturedSegment(
                     screen: screen,

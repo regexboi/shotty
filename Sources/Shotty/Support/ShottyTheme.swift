@@ -1,14 +1,23 @@
 import SwiftUI
 
 enum ShottyTheme {
-    static let purple = Color(red: 0.356, green: 0.129, blue: 0.714)
-    static let purpleBright = Color(red: 0.427, green: 0.157, blue: 0.851)
-    static let gold = Color(red: 0.961, green: 0.773, blue: 0.258)
-    static let goldBright = Color(red: 1.0, green: 0.847, blue: 0.302)
+    static let surface = Color(red: 0.102, green: 0.020, blue: 0.200)
+    static let surfaceDeep = Color(red: 0.071, green: 0.008, blue: 0.157)
+    static let surfaceRaised = Color(red: 0.114, green: 0.027, blue: 0.251)
+    static let surfaceLine = Color(red: 0.239, green: 0.125, blue: 0.400)
 
-    static let shellTop = Color(red: 0.10, green: 0.09, blue: 0.18)
-    static let shellBottom = Color(red: 0.05, green: 0.05, blue: 0.10)
+    static let purple = Color(red: 0.482, green: 0.369, blue: 1.000)
+    static let purpleBright = Color(red: 0.706, green: 0.302, blue: 1.000)
+    static let pinkBright = Color(red: 1.000, green: 0.349, blue: 0.839)
+    static let cyanBright = Color(red: 0.000, green: 0.898, blue: 1.000)
+    static let lavender = Color(red: 0.910, green: 0.878, blue: 0.941)
+    static let lavenderDim = Color(red: 0.769, green: 0.710, blue: 0.831)
+    static let gold = Color(red: 1.000, green: 0.855, blue: 0.271)
+    static let goldBright = Color(red: 1.000, green: 0.910, blue: 0.478)
 
-    static let canvasBaseTop = Color(red: 0.16, green: 0.14, blue: 0.24)
-    static let canvasBaseBottom = Color(red: 0.09, green: 0.09, blue: 0.16)
+    static let shellTop = Color(red: 0.165, green: 0.051, blue: 0.290)
+    static let shellBottom = Color(red: 0.071, green: 0.008, blue: 0.157)
+
+    static let canvasBaseTop = Color(red: 0.114, green: 0.027, blue: 0.251)
+    static let canvasBaseBottom = Color(red: 0.102, green: 0.020, blue: 0.200)
 }

@@ -11,6 +11,12 @@ final class EditorViewModel: ObservableObject {
     @Published private(set) var canUndo = false
     @Published private(set) var canRedo = false
     @Published private(set) var textEditingAnnotationID: UUID?
+    @Published private var toolStyles: [AnnotationTool: AnnotationToolStyle] = AnnotationTool.allCases.reduce(into: [:]) { styles, tool in
+        styles[tool] = AnnotationToolStyle(
+            colorToken: tool.defaultColorToken,
+            sizePreset: tool.defaultSizePreset
+        )
+    }
 
     var onRequestClose: (() -> Void)?
     weak var windowProvider: EditorWindowController?
@@ -68,6 +74,8 @@ final class EditorViewModel: ObservableObject {
             return "Circle selected"
         case .highlight:
             return "Highlight selected"
+        case .arrow:
+            return "Arrow selected"
         }
     }
 
@@ -84,7 +92,7 @@ final class EditorViewModel: ObservableObject {
                 : "Click with the text tool to edit inline, or press Delete to remove the text annotation."
         }
 
-        return "Selection is delete-only in Phase 3. Layering stays in creation order and selected items are outlined."
+        return "Selection is delete-only. Layering stays in creation order, and Delete removes the current selection."
     }
 
     var historyStatusDetail: String {
@@ -111,6 +119,18 @@ final class EditorViewModel: ObservableObject {
     var selectedAnnotation: AnnotationSnapshot? {
         guard let selectedID = document.selectedAnnotationID else { return nil }
         return annotation(withID: selectedID)
+    }
+
+    var currentToolStyle: AnnotationToolStyle {
+        style(for: document.selectedTool)
+    }
+
+    var currentToolColor: AnnotationColorToken {
+        currentToolStyle.colorToken
+    }
+
+    var currentToolSizePreset: AnnotationSizePreset {
+        currentToolStyle.sizePreset
     }
 
     func bindExportService(_ exportService: ExportService) {
@@ -243,6 +263,27 @@ final class EditorViewModel: ObservableObject {
         document.annotations.first { $0.id == id }
     }
 
+    func style(for tool: AnnotationTool) -> AnnotationToolStyle {
+        toolStyles[tool] ?? AnnotationToolStyle(
+            colorToken: tool.defaultColorToken,
+            sizePreset: tool.defaultSizePreset
+        )
+    }
+
+    func selectAnnotationColor(_ color: AnnotationColorToken) {
+        updateStyle(for: document.selectedTool) { style in
+            style.colorToken = color
+        }
+        statusMessage = "\(document.selectedTool.title) color updated."
+    }
+
+    func selectAnnotationSizePreset(_ sizePreset: AnnotationSizePreset) {
+        updateStyle(for: document.selectedTool) { style in
+            style.sizePreset = sizePreset
+        }
+        statusMessage = "\(document.selectedTool.title) size set to \(sizePreset.title.uppercased())."
+    }
+
     func selectAnnotation(_ id: UUID?) {
         document.selectedAnnotationID = id
 
@@ -278,7 +319,12 @@ final class EditorViewModel: ObservableObject {
 
     @discardableResult
     func createTextAnnotation(at origin: CGPoint) -> UUID {
-        let annotation = AnnotationSnapshot.makeText(at: origin)
+        let style = currentToolStyle
+        let annotation = AnnotationSnapshot.makeText(
+            at: origin,
+            color: style.colorToken,
+            fontSize: style.sizePreset.textFontSize
+        )
         let id = addAnnotation(annotation)
         textEditingAnnotationID = id
         statusMessage = "Text annotation placed. Type to edit inline."
@@ -366,6 +412,20 @@ final class EditorViewModel: ObservableObject {
 
         statusMessage = "Editor closed. Re-open it with the Shotty dock icon or trigger the hotkey again."
         onRequestClose?()
+    }
+
+    private func updateStyle(
+        for tool: AnnotationTool,
+        mutate: (inout AnnotationToolStyle) -> Void
+    ) {
+        var nextStyles = toolStyles
+        var style = nextStyles[tool] ?? AnnotationToolStyle(
+            colorToken: tool.defaultColorToken,
+            sizePreset: tool.defaultSizePreset
+        )
+        mutate(&style)
+        nextStyles[tool] = style
+        toolStyles = nextStyles
     }
 
     private var currentHistoryState: EditorHistoryState {

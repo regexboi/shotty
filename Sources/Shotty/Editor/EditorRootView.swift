@@ -1,14 +1,18 @@
+import AppKit
 import SwiftUI
 
 struct EditorRootView: View {
     @ObservedObject var viewModel: EditorViewModel
+    @State private var showsToolControls = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        VStack(alignment: .leading, spacing: 16) {
             header
             toolSwitcher
+            if showsToolControls {
+                toolControls
+            }
             canvas
-            footer
         }
         .padding(24)
         .frame(minWidth: 980, minHeight: 720)
@@ -20,66 +24,55 @@ struct EditorRootView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 18) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text("Shotty")
-                        .font(.system(size: 32, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.96))
-
-                    Text(viewModel.canvasTitle)
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.5))
-                }
-
-                Text(viewModel.statusMessage)
-                    .font(.system(size: 14, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.7))
-                    .lineLimit(2)
-
-                HStack(spacing: 10) {
-                    badge(
-                        title: viewModel.permissionBadgeTitle,
-                        tint: viewModel.permissionBadgeColor
-                    )
-
-                    badge(
-                        title: viewModel.annotationCountLabel,
-                        tint: .white.opacity(0.8)
-                    )
-
-                    Text("Hotkey: Cmd + Shift + S")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.48))
-                }
-            }
-
+        HStack(alignment: .center, spacing: 18) {
+            dragRegion
             Spacer(minLength: 0)
 
             HStack(spacing: 10) {
-                commandButton("Undo", systemImage: "arrow.uturn.backward") {
+                iconCommandButton(systemImage: "gearshape", help: "Tool Settings") {
+                    showsToolControls.toggle()
+                }
+
+                iconCommandButton(systemImage: "arrow.uturn.backward", help: "Undo") {
                     viewModel.undo()
                 }
                 .disabled(viewModel.canUndo == false)
 
-                commandButton("Redo", systemImage: "arrow.uturn.forward") {
+                iconCommandButton(systemImage: "arrow.uturn.forward", help: "Redo") {
                     viewModel.redo()
                 }
                 .disabled(viewModel.canRedo == false)
 
-                commandButton("Copy", systemImage: "doc.on.doc") {
+                iconCommandButton(systemImage: "doc.on.doc", help: "Copy") {
                     viewModel.copyCurrentImageToPasteboard()
                 }
 
-                commandButton("Save", systemImage: "square.and.arrow.down") {
+                iconCommandButton(systemImage: "square.and.arrow.down", help: "Save") {
                     viewModel.saveCurrentImage()
                 }
 
-                commandButton("Settings", systemImage: "gearshape") {
+                permissionSettingsButton {
                     viewModel.openSystemSettings()
                 }
             }
         }
+    }
+
+    private var dragRegion: some View {
+        Group {
+            if let logoImage = shottyLogoImage {
+                Image(nsImage: logoImage)
+                    .resizable()
+                    .interpolation(.high)
+                    .scaledToFit()
+                    .frame(width: 66, height: 66)
+                    .padding(.leading, 2)
+            } else {
+                Color.clear
+                    .frame(width: 66, height: 66)
+            }
+        }
+        .frame(width: 68, height: 66, alignment: .leading)
     }
 
     private var toolSwitcher: some View {
@@ -88,22 +81,21 @@ struct EditorRootView: View {
                 Button {
                     viewModel.selectTool(tool)
                 } label: {
-                    VStack(alignment: .leading, spacing: 5) {
-                        HStack(spacing: 8) {
-                            Image(systemName: tool.symbolName)
-                                .font(.system(size: 15, weight: .semibold))
+                    HStack(spacing: 10) {
+                        Image(systemName: tool.symbolName)
+                            .font(.system(size: 15, weight: .semibold))
 
-                            Text(tool.title)
-                                .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        }
-
-                        Text(tool.shortDescription)
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.56))
+                        Text(tool.title)
+                            .font(.system(size: 14, weight: .semibold, design: .rounded))
                             .lineLimit(1)
+
+                        Text("[\(tool.shortcutIndex)]")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.46))
+                            .fixedSize()
                     }
-                    .padding(.vertical, 11)
-                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 13)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(ToolChipButtonStyle(isSelected: viewModel.document.selectedTool == tool))
@@ -111,58 +103,88 @@ struct EditorRootView: View {
         }
     }
 
-    private var canvas: some View {
-        AnnotationCanvasView(viewModel: viewModel)
-            .id(viewModel.document.capturedImage?.captureRect.debugDescription ?? "empty-canvas")
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
+    private var toolControls: some View {
+        HStack(spacing: 18) {
+            HStack(spacing: 10) {
+                Text("Color")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(ShottyTheme.lavenderDim)
 
-    private var footer: some View {
-        HStack(spacing: 14) {
-            infoCard(
-                title: "Active Tool",
-                body: "\(viewModel.document.selectedTool.title). \(viewModel.selectedToolDescription)"
-            )
+                HStack(spacing: 8) {
+                    ForEach(AnnotationColorToken.allCases, id: \.rawValue) { color in
+                        Button {
+                            viewModel.selectAnnotationColor(color)
+                        } label: {
+                            Circle()
+                                .fill(color.color)
+                                .frame(width: 18, height: 18)
+                        }
+                        .buttonStyle(ColorSwatchButtonStyle(isSelected: viewModel.currentToolColor == color))
+                        .help(color.title)
+                    }
+                }
+            }
 
-            infoCard(
-                title: viewModel.selectionStatusTitle,
-                body: viewModel.selectionStatusDetail
-            )
+            HStack(spacing: 10) {
+                Text(viewModel.document.selectedTool == .text ? "Font" : "Size")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(ShottyTheme.lavenderDim)
 
-            infoCard(
-                title: viewModel.canUndo || viewModel.canRedo ? "History Ready" : "History Idle",
-                body: viewModel.historyStatusDetail
-            )
+                HStack(spacing: 8) {
+                    ForEach(AnnotationSizePreset.allCases) { sizePreset in
+                        Button {
+                            viewModel.selectAnnotationSizePreset(sizePreset)
+                        } label: {
+                            Text(sizePreset.title)
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .frame(minWidth: 28)
+                        }
+                        .buttonStyle(SizeChipButtonStyle(isSelected: viewModel.currentToolSizePreset == sizePreset))
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
         }
     }
 
+    private var canvas: some View {
+        NonDraggableHostingRegion {
+            AnnotationCanvasView(viewModel: viewModel)
+                .id(viewModel.document.capturedImage?.captureRect.debugDescription ?? "empty-canvas")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     private var backgroundShell: some View {
-        RoundedRectangle(cornerRadius: 32, style: .continuous)
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
             .fill(.ultraThinMaterial)
             .background(
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
                     .fill(
                         LinearGradient(
                             colors: [
-                                ShottyTheme.shellTop.opacity(0.92),
-                                ShottyTheme.shellBottom.opacity(0.84)
+                                ShottyTheme.shellTop.opacity(0.96),
+                                ShottyTheme.surfaceRaised.opacity(0.92),
+                                ShottyTheme.shellBottom.opacity(0.94)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
             )
-            .clipShape(RoundedRectangle(cornerRadius: 32, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
             .shadow(color: .black.opacity(0.22), radius: 30, x: 0, y: 18)
     }
 
     private var shellStroke: some View {
-        RoundedRectangle(cornerRadius: 32, style: .continuous)
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
             .strokeBorder(
                 LinearGradient(
                     colors: [
-                        .white.opacity(0.28),
-                        .white.opacity(0.08)
+                        ShottyTheme.purpleBright.opacity(0.5),
+                        ShottyTheme.surfaceLine.opacity(0.42)
                     ],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -171,62 +193,59 @@ struct EditorRootView: View {
             )
     }
 
-    private func badge(title: String, tint: Color) -> some View {
-        Text(title)
-            .font(.system(size: 12, weight: .semibold, design: .rounded))
-            .padding(.vertical, 7)
-            .padding(.horizontal, 10)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(tint.opacity(0.16))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(tint.opacity(0.32), lineWidth: 1)
-            )
-    }
-
-    private func commandButton(
-        _ title: String,
+    private func iconCommandButton(
         systemImage: String,
+        help: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .semibold))
-
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-            }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 14)
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 38, height: 38)
         }
         .buttonStyle(SecondaryPillButtonStyle())
+        .help(help)
     }
 
-    private func infoCard(title: String, body: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.9))
-
-            Text(body)
-                .font(.system(size: 12, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.64))
-                .fixedSize(horizontal: false, vertical: true)
+    private func permissionSettingsButton(action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "apple.logo")
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 38, height: 38)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(.white.opacity(0.05))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-        )
+        .buttonStyle(PermissionPillButtonStyle(tint: viewModel.permissionBadgeColor))
+        .help(viewModel.permissionBadgeTitle)
     }
+}
+
+private var shottyLogoImage: NSImage? {
+    guard let url = Bundle.module.url(forResource: "logo", withExtension: "png") else {
+        return nil
+    }
+
+    return NSImage(contentsOf: url)
+}
+
+private struct NonDraggableHostingRegion<Content: View>: NSViewRepresentable {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    func makeNSView(context: Context) -> NonDraggableHostingView<Content> {
+        let hostingView = NonDraggableHostingView(rootView: content)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        return hostingView
+    }
+
+    func updateNSView(_ nsView: NonDraggableHostingView<Content>, context: Context) {
+        nsView.rootView = content
+    }
+}
+
+private final class NonDraggableHostingView<Content: View>: NSHostingView<Content> {
+    override var mouseDownCanMoveWindow: Bool { false }
 }
 
 private struct ToolChipButtonStyle: ButtonStyle {
@@ -234,14 +253,23 @@ private struct ToolChipButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(.white.opacity(configuration.isPressed ? 0.9 : 0.96))
+            .foregroundStyle(ShottyTheme.lavender.opacity(configuration.isPressed ? 0.9 : 0.98))
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isSelected ? ShottyTheme.purpleBright.opacity(0.28) : .white.opacity(configuration.isPressed ? 0.08 : 0.04))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? ShottyTheme.purpleBright.opacity(configuration.isPressed ? 0.34 : 0.26)
+                            : ShottyTheme.surfaceRaised.opacity(configuration.isPressed ? 0.92 : 0.8)
+                    )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(isSelected ? ShottyTheme.purpleBright.opacity(0.5) : .white.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(
+                        isSelected
+                            ? ShottyTheme.purpleBright.opacity(0.72)
+                            : ShottyTheme.surfaceLine.opacity(0.74),
+                        lineWidth: 1
+                    )
             )
     }
 }
@@ -249,14 +277,89 @@ private struct ToolChipButtonStyle: ButtonStyle {
 private struct SecondaryPillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundStyle(.white.opacity(configuration.isPressed ? 0.84 : 0.92))
+            .foregroundStyle(ShottyTheme.lavender.opacity(configuration.isPressed ? 0.84 : 0.94))
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(.white.opacity(configuration.isPressed ? 0.11 : 0.06))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(ShottyTheme.surfaceRaised.opacity(configuration.isPressed ? 0.96 : 0.84))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(ShottyTheme.surfaceLine.opacity(0.72), lineWidth: 1)
+            )
+    }
+}
+
+private struct ColorSwatchButtonStyle: ButtonStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(4)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? ShottyTheme.surfaceRaised.opacity(0.98)
+                            : ShottyTheme.surface.opacity(configuration.isPressed ? 0.95 : 0.8)
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        isSelected
+                            ? ShottyTheme.purpleBright.opacity(0.78)
+                            : ShottyTheme.surfaceLine.opacity(0.66),
+                        lineWidth: isSelected ? 1.5 : 1
+                    )
+            )
+    }
+}
+
+private struct SizeChipButtonStyle: ButtonStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(
+                isSelected
+                    ? Color.white.opacity(configuration.isPressed ? 0.92 : 0.98)
+                    : ShottyTheme.lavender.opacity(configuration.isPressed ? 0.84 : 0.94)
+            )
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? ShottyTheme.purpleBright.opacity(configuration.isPressed ? 0.74 : 0.62)
+                            : ShottyTheme.surfaceRaised.opacity(configuration.isPressed ? 0.96 : 0.84)
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(
+                        isSelected
+                            ? ShottyTheme.pinkBright.opacity(0.74)
+                            : ShottyTheme.surfaceLine.opacity(0.72),
+                        lineWidth: 1
+                    )
+            )
+    }
+}
+
+private struct PermissionPillButtonStyle: ButtonStyle {
+    let tint: Color
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .foregroundStyle(.white.opacity(configuration.isPressed ? 0.86 : 0.96))
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(tint.opacity(configuration.isPressed ? 0.42 : 0.28))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(tint.opacity(0.62), lineWidth: 1)
             )
     }
 }

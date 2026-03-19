@@ -13,6 +13,12 @@ VERSION="${SHOTTY_VERSION:-0.1.0}"
 BUILD_NUMBER="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || date +%s)"
 BUNDLE_ID="com.mishca.shotty"
 REQUIREMENT="designated => identifier \"$BUNDLE_ID\""
+SOURCE_LOGO_PATH="$ROOT_DIR/logo.png"
+BUNDLED_LOGO_DIR="$ROOT_DIR/Sources/Shotty/Resources"
+BUNDLED_LOGO_PATH="$BUNDLED_LOGO_DIR/logo.png"
+
+mkdir -p "$BUNDLED_LOGO_DIR"
+cp "$SOURCE_LOGO_PATH" "$BUNDLED_LOGO_PATH"
 
 xcodebuild \
   -scheme Shotty \
@@ -24,6 +30,8 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
 
 cp "$EXECUTABLE_PATH" "$APP_BUNDLE/Contents/MacOS/Shotty"
+
+find "$PRODUCT_DIR" -maxdepth 1 -name '*.bundle' -exec cp -R {} "$APP_BUNDLE/Contents/Resources/" \;
 
 cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
