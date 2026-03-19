@@ -3,25 +3,38 @@ import SwiftUI
 
 struct EditorRootView: View {
     @ObservedObject var viewModel: EditorViewModel
-    @State private var showsToolControls = false
+    @State private var showsSettingsSidebar = false
     private let shellCornerRadius: CGFloat = 26
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             header
-            toolSwitcher
-            if showsToolControls {
-                toolControls
+            HStack(alignment: .top, spacing: 18) {
+                mainWorkspace
+
+                if showsSettingsSidebar {
+                    settingsSidebar
+                        .frame(width: 340)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
             }
-            canvas
         }
         .padding(24)
-        .frame(minWidth: 980, minHeight: 720)
+        .frame(minWidth: 1080, minHeight: 720)
         .background(backgroundShell)
         .overlay(shellStroke)
+        .animation(.spring(response: 0.26, dampingFraction: 0.88), value: showsSettingsSidebar)
         .onExitCommand {
             viewModel.handleEscape()
         }
+    }
+
+    private var mainWorkspace: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            toolSwitcher
+            canvas
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var header: some View {
@@ -30,8 +43,8 @@ struct EditorRootView: View {
             Spacer(minLength: 0)
 
             HStack(spacing: 10) {
-                iconCommandButton(systemImage: "gearshape", help: "Tool Settings") {
-                    showsToolControls.toggle()
+                iconCommandButton(systemImage: "gearshape", help: "Appearance & Tool Settings") {
+                    showsSettingsSidebar.toggle()
                 }
 
                 iconCommandButton(systemImage: "arrow.uturn.backward", help: "Undo") {
@@ -120,30 +133,58 @@ struct EditorRootView: View {
         }
     }
 
+    private var settingsSidebar: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                settingsHeader
+                toolControls
+                appearanceControls
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(18)
+        }
+        .scrollIndicators(.hidden)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(Color.white.opacity(0.048))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.16), radius: 24, x: 0, y: 16)
+    }
+
+    private var settingsHeader: some View {
+        Text("Editor Settings")
+            .font(.system(size: 18, weight: .bold, design: .rounded))
+            .foregroundStyle(ShottyTheme.goldBright.opacity(0.98))
+    }
+
     private var toolControls: some View {
-        HStack(spacing: 18) {
-            HStack(spacing: 10) {
-                Text("Color")
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Annotation Color")
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundStyle(ShottyTheme.goldBright.opacity(0.94))
 
-                HStack(spacing: 8) {
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(26), spacing: 10), count: 6), spacing: 10) {
                     ForEach(AnnotationColorToken.allCases, id: \.rawValue) { color in
                         Button {
                             viewModel.selectAnnotationColor(color)
                         } label: {
                             Circle()
                                 .fill(color.color)
-                                .frame(width: 18, height: 18)
+                                .frame(width: 16, height: 16)
+                                .frame(width: 26, height: 26)
                         }
-                        .buttonStyle(ColorSwatchButtonStyle(isSelected: viewModel.currentToolColor == color))
-                        .help(color.title)
+                        .buttonStyle(ColorChipButtonStyle(isSelected: viewModel.currentToolColor == color))
                     }
                 }
             }
 
-            HStack(spacing: 10) {
-                Text(viewModel.document.selectedTool == .text ? "Font" : "Size")
+            VStack(alignment: .leading, spacing: 10) {
+                Text(viewModel.document.selectedTool == .text ? "Font Size" : "Stroke Size")
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundStyle(ShottyTheme.goldBright.opacity(0.94))
 
@@ -152,16 +193,110 @@ struct EditorRootView: View {
                         Button {
                             viewModel.selectAnnotationSizePreset(sizePreset)
                         } label: {
-                            Text(sizePreset.title)
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
-                                .frame(minWidth: 28)
+                            Text(sizePreset.title.uppercased())
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 9)
                         }
                         .buttonStyle(SizeChipButtonStyle(isSelected: viewModel.currentToolSizePreset == sizePreset))
                     }
                 }
             }
+        }
+    }
 
-            Spacer(minLength: 0)
+    private var appearanceControls: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 12) {
+                appearanceToggle(
+                    title: "Background",
+                    isOn: Binding(
+                        get: { viewModel.document.appearance.backgroundModeEnabled },
+                        set: { viewModel.setBackgroundModeEnabled($0) }
+                    )
+                )
+
+                appearanceToggle(
+                    title: "Balance",
+                    isOn: Binding(
+                        get: { viewModel.document.appearance.balanceEnabled },
+                        set: { viewModel.setBalanceEnabled($0) }
+                    )
+                )
+                .disabled(viewModel.document.appearance.backgroundModeEnabled == false)
+                .opacity(viewModel.document.appearance.backgroundModeEnabled ? 1 : 0.58)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Backgrounds")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(ShottyTheme.goldBright.opacity(0.94))
+
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
+                    ForEach(ScreenshotBackgroundPreset.allCases) { preset in
+                        Button {
+                            viewModel.selectBackgroundPreset(preset)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ScreenshotBackgroundView(preset: preset, cornerRadius: 12)
+                                    .frame(height: 64)
+
+                                Text(preset.title)
+                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(ShottyTheme.lavender.opacity(0.96))
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .buttonStyle(BackgroundPresetButtonStyle(isSelected: viewModel.document.appearance.backgroundPreset == preset))
+                        .disabled(viewModel.document.appearance.backgroundModeEnabled == false)
+                        .opacity(viewModel.document.appearance.backgroundModeEnabled ? 1 : 0.56)
+                    }
+                }
+            }
+
+            appearanceSlider(
+                title: "Padding",
+                value: Binding(
+                    get: { Double(viewModel.document.appearance.padding) },
+                    set: { viewModel.setBackgroundPadding(CGFloat($0)) }
+                ),
+                range: ScreenshotAppearance.paddingRange,
+                valueLabel: "\(Int(viewModel.document.appearance.clampedPadding.rounded())) px"
+            )
+            .disabled(viewModel.document.appearance.backgroundModeEnabled == false)
+            .opacity(viewModel.document.appearance.backgroundModeEnabled ? 1 : 0.58)
+
+            appearanceSlider(
+                title: "Inset",
+                value: Binding(
+                    get: { Double(viewModel.document.appearance.inset) },
+                    set: { viewModel.setImageInset(CGFloat($0)) }
+                ),
+                range: ScreenshotAppearance.insetRange,
+                valueLabel: "\(Int(viewModel.document.appearance.clampedInset.rounded())) px"
+            )
+
+            appearanceSlider(
+                title: "Radius",
+                value: Binding(
+                    get: { Double(viewModel.document.appearance.cornerRadius) },
+                    set: { viewModel.setImageCornerRadius(CGFloat($0)) }
+                ),
+                range: ScreenshotAppearance.cornerRadiusRange,
+                valueLabel: "\(Int(viewModel.document.appearance.clampedCornerRadius.rounded())) px"
+            )
+
+            appearanceSlider(
+                title: "Shadow",
+                value: Binding(
+                    get: { Double(viewModel.document.appearance.shadow) },
+                    set: { viewModel.setImageShadow(CGFloat($0)) }
+                ),
+                range: ScreenshotAppearance.shadowRange,
+                valueLabel: "\(Int(viewModel.document.appearance.clampedShadow.rounded())) px"
+            )
+            .disabled(viewModel.document.appearance.backgroundModeEnabled == false)
+            .opacity(viewModel.document.appearance.backgroundModeEnabled ? 1 : 0.58)
         }
     }
 
@@ -305,6 +440,48 @@ struct EditorRootView: View {
         .buttonStyle(PermissionPillButtonStyle(tint: viewModel.permissionBadgeColor))
         .help(viewModel.permissionBadgeTitle)
     }
+
+    private func appearanceToggle(
+        title: String,
+        isOn: Binding<Bool>
+    ) -> some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundStyle(ShottyTheme.goldBright.opacity(0.96))
+
+            Spacer(minLength: 0)
+
+            Toggle("", isOn: isOn)
+                .labelsHidden()
+                .toggleStyle(.switch)
+        }
+    }
+
+    private func appearanceSlider(
+        title: String,
+        value: Binding<Double>,
+        range: ClosedRange<Double>,
+        valueLabel: String
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundStyle(ShottyTheme.goldBright.opacity(0.94))
+
+                Spacer(minLength: 0)
+
+                Text(valueLabel)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundStyle(ShottyTheme.lavender.opacity(0.88))
+            }
+
+            Slider(value: value, in: range)
+                .tint(ShottyTheme.goldBright)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
 }
 
 private var shottyLogoImage: NSImage? {
@@ -384,27 +561,26 @@ private struct SecondaryPillButtonStyle: ButtonStyle {
     }
 }
 
-private struct ColorSwatchButtonStyle: ButtonStyle {
+private struct ColorChipButtonStyle: ButtonStyle {
     let isSelected: Bool
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .padding(4)
             .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(
                         isSelected
-                            ? Color.white.opacity(0.13)
-                            : Color.white.opacity(configuration.isPressed ? 0.09 : 0.05)
+                            ? ShottyTheme.purpleBright.opacity(configuration.isPressed ? 0.20 : 0.14)
+                            : Color.white.opacity(configuration.isPressed ? 0.08 : 0.04)
                     )
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .strokeBorder(
                         isSelected
                             ? ShottyTheme.goldBright.opacity(0.82)
-                            : Color.white.opacity(0.12),
-                        lineWidth: isSelected ? 1.5 : 1
+                            : Color.white.opacity(0.10),
+                        lineWidth: 1
                     )
             )
     }
@@ -420,8 +596,6 @@ private struct SizeChipButtonStyle: ButtonStyle {
                     ? ShottyTheme.goldBright.opacity(configuration.isPressed ? 0.90 : 0.98)
                     : ShottyTheme.lavender.opacity(configuration.isPressed ? 0.84 : 0.94)
             )
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(
@@ -436,6 +610,32 @@ private struct SizeChipButtonStyle: ButtonStyle {
                         isSelected
                             ? ShottyTheme.goldBright.opacity(0.84)
                             : Color.white.opacity(0.12),
+                        lineWidth: 1
+                    )
+            )
+    }
+}
+
+private struct BackgroundPresetButtonStyle: ButtonStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(
+                        isSelected
+                            ? ShottyTheme.purpleBright.opacity(configuration.isPressed ? 0.20 : 0.14)
+                            : Color.white.opacity(configuration.isPressed ? 0.08 : 0.04)
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(
+                        isSelected
+                            ? ShottyTheme.goldBright.opacity(0.82)
+                            : Color.white.opacity(0.10),
                         lineWidth: 1
                     )
             )

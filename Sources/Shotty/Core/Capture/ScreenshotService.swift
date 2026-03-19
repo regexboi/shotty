@@ -37,11 +37,13 @@ final class ScreenshotService {
 
         let preferredScale = maximumScale(for: intersectingScreens)
         let nsImage = NSImage(cgImage: image, size: NSSize(width: selection.width, height: selection.height))
+        let balanceFocusRect = ScreenshotBalanceAnalyzer.focusRect(for: nsImage)
 
         return CapturedImage(
             image: nsImage,
             captureRect: selection,
-            displayScale: preferredScale
+            displayScale: preferredScale,
+            balanceFocusRect: balanceFocusRect
         )
     }
 

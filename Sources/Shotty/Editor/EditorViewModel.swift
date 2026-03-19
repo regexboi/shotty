@@ -133,6 +133,10 @@ final class EditorViewModel: ObservableObject {
         currentToolStyle.sizePreset
     }
 
+    var screenshotAppearance: ScreenshotAppearance {
+        document.appearance
+    }
+
     func bindExportService(_ exportService: ExportService) {
         self.exportService = exportService
     }
@@ -190,9 +194,11 @@ final class EditorViewModel: ObservableObject {
 
     func presentCapture(image: CapturedImage) {
         let selectedTool = document.selectedTool
+        let appearance = document.appearance
         document = EditorDocument(
             capturedImage: image,
             annotations: [],
+            appearance: appearance,
             selectedTool: selectedTool,
             selectedAnnotationID: nil
         )
@@ -212,6 +218,41 @@ final class EditorViewModel: ObservableObject {
         }
 
         statusMessage = "\(tool.title) selected. \(tool.shortDescription)"
+    }
+
+    func setBackgroundModeEnabled(_ isEnabled: Bool) {
+        document.appearance.backgroundModeEnabled = isEnabled
+        statusMessage = isEnabled
+            ? "Background mode enabled."
+            : "Background mode disabled."
+    }
+
+    func selectBackgroundPreset(_ preset: ScreenshotBackgroundPreset) {
+        document.appearance.backgroundPreset = preset
+        statusMessage = "\(preset.title) background selected."
+    }
+
+    func setBalanceEnabled(_ isEnabled: Bool) {
+        document.appearance.balanceEnabled = isEnabled
+        statusMessage = isEnabled
+            ? "Automatic balance enabled."
+            : "Automatic balance disabled."
+    }
+
+    func setBackgroundPadding(_ value: CGFloat) {
+        document.appearance.padding = value
+    }
+
+    func setImageInset(_ value: CGFloat) {
+        document.appearance.inset = value
+    }
+
+    func setImageCornerRadius(_ value: CGFloat) {
+        document.appearance.cornerRadius = value
+    }
+
+    func setImageShadow(_ value: CGFloat) {
+        document.appearance.shadow = value
     }
 
     func copyCurrentImageToPasteboard() {

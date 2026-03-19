@@ -15,9 +15,13 @@ struct AnnotationCanvasView: View {
 
             ZStack {
                 if let capturedImage = viewModel.document.capturedImage {
+                    let presentation = ScreenshotPresentationLayout(
+                        capturedImage: capturedImage,
+                        appearance: viewModel.document.appearance
+                    )
                     let layout = CanvasLayout(
                         containerSize: containerSize,
-                        imageSize: capturedImage.image.size
+                        presentation: presentation
                     )
 
                     canvasContent(
@@ -71,50 +75,34 @@ struct AnnotationCanvasView: View {
         layout: CanvasLayout
     ) -> some View {
         ZStack(alignment: .topLeading) {
-            Image(nsImage: capturedImage.image)
-                .resizable()
-                .interpolation(.high)
-                .frame(width: layout.imageRect.width, height: layout.imageRect.height)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .position(x: layout.imageRect.midX, y: layout.imageRect.midY)
+            StyledScreenshotStageView(
+                capturedImage: capturedImage,
+                appearance: viewModel.document.appearance,
+                annotations: stageAnnotations,
+                hiddenTextAnnotationID: viewModel.textEditingAnnotationID
+            )
+            .scaleEffect(layout.scale, anchor: .topLeading)
+            .frame(width: layout.canvasRect.width, height: layout.canvasRect.height, alignment: .topLeading)
+            .offset(x: layout.canvasRect.minX, y: layout.canvasRect.minY)
 
-            annotationDrawingLayer(layout: layout)
-                .frame(width: layout.imageRect.width, height: layout.imageRect.height)
-                .position(x: layout.imageRect.midX, y: layout.imageRect.midY)
-                .allowsHitTesting(false)
-
-            ForEach(textAnnotations) { annotation in
-                textOverlay(for: annotation, layout: layout)
+            ForEach(editableTextAnnotations) { annotation in
+                editingTextOverlay(for: annotation, layout: layout)
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-    }
-
-    private func annotationDrawingLayer(layout: CanvasLayout) -> some View {
-        Canvas { context, size in
-            context.scaleBy(x: layout.scale, y: layout.scale)
-
-            for annotation in viewModel.document.annotations {
-                draw(annotation, in: &context)
-            }
-
-            if let draftSnapshot = draftAnnotation?.snapshot {
-                draw(draftSnapshot, in: &context)
-            }
-
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     @ViewBuilder
-    private func textOverlay(
+    private func editingTextOverlay(
         for annotation: TextAnnotation,
         layout: CanvasLayout
     ) -> some View {
-        let textRect = layout.viewRect(from: annotation.textBounds)
-        let editorWidth = max(textRect.width, 120 * layout.scale)
-        let editorHeight = max(textRect.height, annotation.fontSize * layout.scale * 1.2)
+        if viewModel.textEditingAnnotationID == annotation.id,
+           annotation.textBounds.intersects(layout.presentation.visibleImageRect) {
+            let textRect = layout.viewRect(fromSourceRect: annotation.textBounds)
+            let editorWidth = max(textRect.width, 120 * layout.scale)
+            let editorHeight = max(textRect.height, annotation.fontSize * layout.scale * 1.2)
 
-        if viewModel.textEditingAnnotationID == annotation.id {
             InlineAnnotationTextField(
                 text: $editingText,
                 fontSize: annotation.fontSize * layout.scale,
@@ -125,22 +113,22 @@ struct AnnotationCanvasView: View {
             .id(textEditorSessionID)
             .frame(width: editorWidth, height: editorHeight, alignment: .topLeading)
             .offset(x: textRect.minX, y: textRect.minY)
-        } else {
-            Text(annotation.text)
-                .font(.system(size: annotation.fontSize * layout.scale, weight: .semibold, design: .rounded))
-                .foregroundStyle(annotation.color.color)
-                .shadow(color: .black.opacity(0.22), radius: 1, x: 0, y: 1)
-                .frame(width: textRect.width, height: textRect.height, alignment: .topLeading)
-                .offset(x: textRect.minX, y: textRect.minY)
-                .allowsHitTesting(false)
         }
     }
 
-    private var textAnnotations: [TextAnnotation] {
-        viewModel.document.annotations.compactMap { annotation in
+    private var editableTextAnnotations: [TextAnnotation] {
+        stageAnnotations.compactMap { annotation in
             guard case let .text(textAnnotation) = annotation else { return nil }
             return textAnnotation
         }
+    }
+
+    private var stageAnnotations: [AnnotationSnapshot] {
+        if let draftSnapshot = draftAnnotation?.snapshot {
+            return viewModel.document.annotations + [draftSnapshot]
+        }
+
+        return viewModel.document.annotations
     }
 
     private func canvasGesture(layout: CanvasLayout) -> some Gesture {
@@ -199,7 +187,7 @@ struct AnnotationCanvasView: View {
         }
 
         if distance <= 4 {
-            handleTap(at: session.startImagePoint, imageSize: layout.imageSize)
+            handleTap(at: session.startImagePoint, layout: layout)
             return
         }
 
@@ -207,7 +195,7 @@ struct AnnotationCanvasView: View {
         viewModel.addAnnotation(snapshot)
     }
 
-    private func handleTap(at point: CGPoint, imageSize: CGSize) {
+    private func handleTap(at point: CGPoint, layout: CanvasLayout) {
         if let hitID = hitTestAnnotation(at: point) {
             viewModel.selectAnnotation(hitID)
 
@@ -223,7 +211,7 @@ struct AnnotationCanvasView: View {
         viewModel.selectAnnotation(nil)
 
         guard viewModel.document.selectedTool == .text else { return }
-        let origin = clampedTextOrigin(point, imageSize: imageSize)
+        let origin = clampedTextOrigin(point, imageBounds: layout.presentation.visibleImageRect)
         let annotationID = viewModel.createTextAnnotation(at: origin)
         beginInlineTextEdit(annotationID: annotationID)
     }
@@ -298,111 +286,57 @@ struct AnnotationCanvasView: View {
         }
     }
 
-    private func clampedTextOrigin(_ point: CGPoint, imageSize: CGSize) -> CGPoint {
+    private func clampedTextOrigin(_ point: CGPoint, imageBounds: CGRect) -> CGPoint {
         CGPoint(
-            x: min(max(point.x, 12), max(imageSize.width - 80, 12)),
-            y: min(max(point.y, 12), max(imageSize.height - 38, 12))
+            x: min(max(point.x, imageBounds.minX + 12), max(imageBounds.maxX - 80, imageBounds.minX + 12)),
+            y: min(max(point.y, imageBounds.minY + 12), max(imageBounds.maxY - 38, imageBounds.minY + 12))
         )
     }
 
-    private func draw(_ annotation: AnnotationSnapshot, in context: inout GraphicsContext) {
-        switch annotation {
-        case .text:
-            break
-        case let .path(pathAnnotation):
-            context.stroke(
-                Path(smoothedPath(for: pathAnnotation.points)),
-                with: .color(pathAnnotation.color.color),
-                style: StrokeStyle(
-                    lineWidth: pathAnnotation.lineWidth,
-                    lineCap: .round,
-                    lineJoin: .round
-                )
-            )
-        case let .rect(rectAnnotation):
-            context.stroke(
-                Path(rectAnnotation.rect.standardized),
-                with: .color(rectAnnotation.color.color),
-                style: StrokeStyle(
-                    lineWidth: rectAnnotation.lineWidth,
-                    lineCap: .round,
-                    lineJoin: .round
-                )
-            )
-        case let .ellipse(ellipseAnnotation):
-            context.stroke(
-                Path(ellipseIn: ellipseAnnotation.rect.standardized),
-                with: .color(ellipseAnnotation.color.color),
-                style: StrokeStyle(
-                    lineWidth: ellipseAnnotation.lineWidth,
-                    lineCap: .round,
-                    lineJoin: .round
-                )
-            )
-        case let .highlight(highlightAnnotation):
-            context.blendMode = .multiply
-            context.stroke(
-                Path(smoothedPath(for: highlightAnnotation.points)),
-                with: .color(highlightAnnotation.color.color.opacity(0.34)),
-                style: StrokeStyle(
-                    lineWidth: highlightAnnotation.lineWidth,
-                    lineCap: .round,
-                    lineJoin: .round
-                )
-            )
-            context.blendMode = .normal
-        case let .arrow(arrowAnnotation):
-            context.stroke(
-                Path(arrowPath(from: arrowAnnotation.start, to: arrowAnnotation.end, lineWidth: arrowAnnotation.lineWidth)),
-                with: .color(arrowAnnotation.color.color),
-                style: StrokeStyle(
-                    lineWidth: arrowAnnotation.lineWidth,
-                    lineCap: .round,
-                    lineJoin: .round
-                )
-            )
-        }
-    }
 }
 
 private struct CanvasLayout {
+    let presentation: ScreenshotPresentationLayout
     let imageSize: CGSize
-    let imageRect: CGRect
+    let canvasRect: CGRect
     let scale: CGFloat
 
-    init(containerSize: CGSize, imageSize: CGSize) {
-        self.imageSize = imageSize
+    init(containerSize: CGSize, presentation: ScreenshotPresentationLayout) {
+        self.presentation = presentation
+        imageSize = presentation.sourceImageSize
 
-        let widthScale = max((containerSize.width - 32) / max(imageSize.width, 1), 0.01)
-        let heightScale = max((containerSize.height - 32) / max(imageSize.height, 1), 0.01)
+        let widthScale = max((containerSize.width - 32) / max(presentation.canvasSize.width, 1), 0.01)
+        let heightScale = max((containerSize.height - 32) / max(presentation.canvasSize.height, 1), 0.01)
         scale = min(widthScale, heightScale)
 
         let fittedSize = CGSize(
-            width: imageSize.width * scale,
-            height: imageSize.height * scale
+            width: presentation.canvasSize.width * scale,
+            height: presentation.canvasSize.height * scale
         )
         let origin = CGPoint(
             x: (containerSize.width - fittedSize.width) / 2,
             y: (containerSize.height - fittedSize.height) / 2
         )
-        imageRect = CGRect(origin: origin, size: fittedSize)
+        canvasRect = CGRect(origin: origin, size: fittedSize)
     }
 
     func imagePoint(from viewPoint: CGPoint) -> CGPoint? {
-        guard imageRect.contains(viewPoint) else { return nil }
-
-        return CGPoint(
-            x: (viewPoint.x - imageRect.minX) / scale,
-            y: (viewPoint.y - imageRect.minY) / scale
+        let canvasPoint = CGPoint(
+            x: (viewPoint.x - canvasRect.minX) / scale,
+            y: (viewPoint.y - canvasRect.minY) / scale
         )
+
+        return presentation.sourcePoint(fromCanvasPoint: canvasPoint)
     }
 
-    func viewRect(from imageRect: CGRect) -> CGRect {
-        CGRect(
-            x: self.imageRect.minX + (imageRect.minX * scale),
-            y: self.imageRect.minY + (imageRect.minY * scale),
-            width: imageRect.width * scale,
-            height: imageRect.height * scale
+    func viewRect(fromSourceRect imageRect: CGRect) -> CGRect {
+        let canvasRect = presentation.canvasRect(fromSourceRect: imageRect)
+
+        return CGRect(
+            x: self.canvasRect.minX + (canvasRect.minX * scale),
+            y: self.canvasRect.minY + (canvasRect.minY * scale),
+            width: canvasRect.width * scale,
+            height: canvasRect.height * scale
         )
     }
 }
