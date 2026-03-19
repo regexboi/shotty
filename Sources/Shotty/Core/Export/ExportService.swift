@@ -3,44 +3,126 @@ import Foundation
 
 @MainActor
 final class ExportService {
-    func copyCurrentImage(document: EditorDocument) -> Bool {
-        guard let image = renderedImage(for: document) else { return false }
+    enum ExportError: LocalizedError {
+        case missingImage
+        case renderFailed
+        case pasteboardWriteFailed
+        case pngEncodingFailed
+        case invalidSaveDestination
+        case saveFailed(Error)
+
+        var errorDescription: String? {
+            switch self {
+            case .missingImage:
+                return "There is no captured image to export yet."
+            case .renderFailed:
+                return "Shotty could not flatten the annotated image."
+            case .pasteboardWriteFailed:
+                return "Shotty could not write the annotated image to the pasteboard."
+            case .pngEncodingFailed:
+                return "Shotty could not encode the annotated image as PNG."
+            case .invalidSaveDestination:
+                return "Shotty did not receive a valid save destination."
+            case let .saveFailed(error):
+                return "Shotty could not save the annotated image: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    enum SaveOutcome {
+        case cancelled
+        case saved(URL)
+    }
+
+    func copyCurrentImage(document: EditorDocument) throws {
+        let image = try renderedImage(for: document)
 
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        return pasteboard.writeObjects([image])
+
+        guard pasteboard.writeObjects([image]) else {
+            throw ExportError.pasteboardWriteFailed
+        }
     }
 
-    func showSavePanel(for document: EditorDocument, from window: NSWindow?) -> Bool {
-        guard let image = renderedImage(for: document) else { return false }
+    func saveCurrentImage(
+        document: EditorDocument,
+        from window: NSWindow?,
+        completion: @escaping (Result<SaveOutcome, ExportError>) -> Void
+    ) {
+        do {
+            let pngData = try pngData(for: document)
+            let panel = NSSavePanel()
+            panel.canCreateDirectories = true
+            panel.allowedContentTypes = [.png]
+            panel.nameFieldStringValue = "Shotty Capture.png"
+
+            if let window {
+                panel.beginSheetModal(for: window) { response in
+                    self.finishSavePanel(
+                        response: response,
+                        panel: panel,
+                        pngData: pngData,
+                        completion: completion
+                    )
+                }
+            } else {
+                let response = panel.runModal()
+                finishSavePanel(
+                    response: response,
+                    panel: panel,
+                    pngData: pngData,
+                    completion: completion
+                )
+            }
+        } catch let error as ExportError {
+            completion(.failure(error))
+        } catch {
+            completion(.failure(.saveFailed(error)))
+        }
+    }
+
+    private func finishSavePanel(
+        response: NSApplication.ModalResponse,
+        panel: NSSavePanel,
+        pngData: Data,
+        completion: @escaping (Result<SaveOutcome, ExportError>) -> Void
+    ) {
+        guard response == .OK else {
+            completion(.success(.cancelled))
+            return
+        }
+
+        guard let url = panel.url else {
+            completion(.failure(.invalidSaveDestination))
+            return
+        }
+
+        do {
+            try pngData.write(to: url)
+            completion(.success(.saved(url)))
+        } catch {
+            completion(.failure(.saveFailed(error)))
+        }
+    }
+
+    private func pngData(for document: EditorDocument) throws -> Data {
+        let image = try renderedImage(for: document)
         guard
             let tiffData = image.tiffRepresentation,
             let bitmap = NSBitmapImageRep(data: tiffData),
             let pngData = bitmap.representation(using: .png, properties: [:])
         else {
-            return false
+            throw ExportError.pngEncodingFailed
         }
 
-        let panel = NSSavePanel()
-        panel.canCreateDirectories = true
-        panel.allowedContentTypes = [.png]
-        panel.nameFieldStringValue = "Shotty Capture.png"
-
-        if let window {
-            panel.beginSheetModal(for: window) { response in
-                guard response == .OK, let url = panel.url else { return }
-                try? pngData.write(to: url)
-            }
-        } else {
-            guard panel.runModal() == .OK, let url = panel.url else { return true }
-            try? pngData.write(to: url)
-        }
-
-        return true
+        return pngData
     }
 
-    private func renderedImage(for document: EditorDocument) -> NSImage? {
-        guard let capturedImage = document.capturedImage else { return nil }
+    private func renderedImage(for document: EditorDocument) throws -> NSImage {
+        guard let capturedImage = document.capturedImage else {
+            throw ExportError.missingImage
+        }
 
         let logicalSize = capturedImage.image.size
         let pixelSize = pixelSize(for: capturedImage)
@@ -60,7 +142,7 @@ final class ExportService {
             ),
             let bitmapContext = NSGraphicsContext(bitmapImageRep: bitmap)
         else {
-            return nil
+            throw ExportError.renderFailed
         }
 
         bitmap.size = logicalSize

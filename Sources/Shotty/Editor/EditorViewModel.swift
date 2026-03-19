@@ -195,18 +195,38 @@ final class EditorViewModel: ObservableObject {
     }
 
     func copyCurrentImageToPasteboard() {
-        if exportService?.copyCurrentImage(document: document) == true {
+        guard let exportService else {
+            statusMessage = "Export service is unavailable."
+            return
+        }
+
+        do {
+            try exportService.copyCurrentImage(document: document)
             statusMessage = "Current annotated image copied to the pasteboard."
-        } else {
-            statusMessage = "Capture an image first, then copy will export the current editor image."
+        } catch {
+            statusMessage = error.localizedDescription
         }
     }
 
     func saveCurrentImage() {
-        if exportService?.showSavePanel(for: document, from: windowProvider?.window) == true {
-            statusMessage = "Save panel opened for the current annotated image."
-        } else {
-            statusMessage = "There is no image to save yet. Capture something first."
+        guard let exportService else {
+            statusMessage = "Export service is unavailable."
+            return
+        }
+
+        statusMessage = "Choose a save location for the annotated image."
+
+        exportService.saveCurrentImage(document: document, from: windowProvider?.window) { [weak self] result in
+            guard let self else { return }
+
+            switch result {
+            case .success(.cancelled):
+                self.statusMessage = "Save cancelled."
+            case let .success(.saved(url)):
+                self.statusMessage = "Annotated image saved to \(url.lastPathComponent)."
+            case let .failure(error):
+                self.statusMessage = error.localizedDescription
+            }
         }
     }
 

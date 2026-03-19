@@ -55,6 +55,12 @@ final class EditorWindowController: NSWindowController, NSWindowDelegate {
         window.onRedo = { [weak self] in
             self?.viewModel.redo()
         }
+        window.onCopy = { [weak self] in
+            self?.viewModel.copyCurrentImageToPasteboard()
+        }
+        window.onSave = { [weak self] in
+            self?.viewModel.saveCurrentImage()
+        }
     }
 
     @available(*, unavailable)
@@ -82,6 +88,8 @@ private final class EditorPanel: NSPanel {
     var onDelete: (() -> Void)?
     var onUndo: (() -> Void)?
     var onRedo: (() -> Void)?
+    var onCopy: (() -> Void)?
+    var onSave: (() -> Void)?
 
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
@@ -116,6 +124,16 @@ private final class EditorPanel: NSPanel {
 
         if characters == "z", flags == [.command, .shift] {
             onRedo?()
+            return true
+        }
+
+        if characters == "c", flags == [.command] {
+            onCopy?()
+            return true
+        }
+
+        if characters == "s", flags == [.command] {
+            onSave?()
             return true
         }
 
