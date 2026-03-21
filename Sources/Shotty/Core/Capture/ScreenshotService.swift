@@ -85,23 +85,7 @@ final class ScreenshotService {
                 }
                 return lhs.frame.minY < rhs.frame.minY
             }
-            .compactMap { screen -> CapturedSegment? in
-                guard
-                    let displayID = screen.displayID,
-                    let display = displaysByID[displayID]
-                else {
-                    return nil
-                }
-
-                let intersection = rect.intersection(display.frame)
-                guard intersection.isNull == false, intersection.isEmpty == false else { return nil }
-
-                return CapturedSegment(
-                    screen: screen,
-                    display: display,
-                    intersection: intersection
-                )
-            }
+            .compactMap { segment(for: $0, selection: rect, displaysByID: displaysByID) }
 
         guard orderedSegments.isEmpty == false else {
             throw CaptureError.missingDisplayMetadata
@@ -163,9 +147,9 @@ final class ScreenshotService {
         let configuration = SCStreamConfiguration()
         configuration.showsCursor = false
         configuration.capturesAudio = false
-        configuration.width = max(1, Int((segment.intersection.width * segment.screen.backingScaleFactor).rounded(.up)))
-        configuration.height = max(1, Int((segment.intersection.height * segment.screen.backingScaleFactor).rounded(.up)))
-        configuration.sourceRect = sourceRect(for: segment)
+        configuration.width = max(1, Int((segment.sourceRect.width * segment.screen.backingScaleFactor).rounded(.up)))
+        configuration.height = max(1, Int((segment.sourceRect.height * segment.screen.backingScaleFactor).rounded(.up)))
+        configuration.sourceRect = segment.sourceRect
 
         let filter = SCContentFilter(display: segment.display, excludingWindows: [])
 
@@ -190,14 +174,53 @@ final class ScreenshotService {
         try await SCShareableContent.current
     }
 
-    private func sourceRect(for segment: CapturedSegment) -> CGRect {
-        // ScreenCaptureKit crops display capture in the display's local coordinate space.
-        // AppKit screen selection comes in with a bottom-left origin, so flip Y before capture.
-        CGRect(
-            x: segment.intersection.minX - segment.display.frame.minX,
-            y: segment.display.frame.maxY - segment.intersection.maxY,
-            width: segment.intersection.width,
-            height: segment.intersection.height
+    private func segment(
+        for screen: NSScreen,
+        selection: CGRect,
+        displaysByID: [CGDirectDisplayID: SCDisplay]
+    ) -> CapturedSegment? {
+        guard
+            let displayID = screen.displayID,
+            let display = displaysByID[displayID]
+        else {
+            return nil
+        }
+
+        let selectionIntersection = selection.intersection(screen.frame)
+        guard selectionIntersection.isNull == false, selectionIntersection.isEmpty == false else {
+            return nil
+        }
+
+        // ScreenCaptureKit crops within a display-local logical coordinate space.
+        // Convert the global AppKit selection into display-local coordinates, then clamp it
+        // to the reported display bounds before turning it back into global coordinates.
+        let unclampedSourceRect = CGRect(
+            x: selectionIntersection.minX - screen.frame.minX,
+            y: screen.frame.maxY - selectionIntersection.maxY,
+            width: selectionIntersection.width,
+            height: selectionIntersection.height
+        )
+        let displayBounds = CGRect(
+            origin: .zero,
+            size: CGSize(width: CGFloat(display.width), height: CGFloat(display.height))
+        )
+        let sourceRect = unclampedSourceRect.intersection(displayBounds)
+        guard sourceRect.isNull == false, sourceRect.isEmpty == false else {
+            return nil
+        }
+
+        let globalIntersection = CGRect(
+            x: screen.frame.minX + sourceRect.minX,
+            y: screen.frame.maxY - sourceRect.maxY,
+            width: sourceRect.width,
+            height: sourceRect.height
+        )
+
+        return CapturedSegment(
+            screen: screen,
+            display: display,
+            intersection: globalIntersection,
+            sourceRect: sourceRect
         )
     }
 
@@ -212,6 +235,7 @@ private struct CapturedSegment {
     let screen: NSScreen
     let display: SCDisplay
     let intersection: CGRect
+    let sourceRect: CGRect
 }
 
 private struct RenderedSegment {
