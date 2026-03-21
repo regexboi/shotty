@@ -283,6 +283,7 @@ final class EditorViewModel: ObservableObject {
         do {
             try exportService.copyCurrentImage(document: document)
             statusMessage = "Current annotated image copied to the pasteboard."
+            onRequestClose?()
         } catch {
             statusMessage = error.localizedDescription
         }
