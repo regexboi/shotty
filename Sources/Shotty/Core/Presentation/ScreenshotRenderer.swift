@@ -82,17 +82,18 @@ struct ScreenshotPresentationLayout {
     let appearance: ScreenshotAppearance
 
     init(capturedImage: CapturedImage, appearance: ScreenshotAppearance) {
-        sourceImageSize = capturedImage.image.size
+        let pixelScale = pixelScale(for: capturedImage)
+        sourceImageSize = alignedSize(capturedImage.image.size, scale: pixelScale)
         self.appearance = appearance
 
         let fullRect = CGRect(origin: .zero, size: sourceImageSize)
         let maxInset = max(0, (min(sourceImageSize.width, sourceImageSize.height) - 1) / 2)
-        let inset = min(appearance.clampedInset, maxInset)
+        let inset = alignedValue(min(appearance.clampedInset, maxInset), scale: pixelScale)
         let insetRect = fullRect.insetBy(dx: inset, dy: inset)
-        visibleImageRect = insetRect.isEmpty ? fullRect : insetRect
+        visibleImageRect = insetRect.isEmpty ? fullRect : alignedRect(insetRect, scale: pixelScale)
 
         if appearance.backgroundModeEnabled {
-            let padding = appearance.clampedPadding
+            let padding = alignedValue(appearance.clampedPadding, scale: pixelScale)
             let visibleSize = visibleImageRect.size
             canvasSize = CGSize(
                 width: visibleSize.width + (padding * 2),
@@ -109,12 +110,18 @@ struct ScreenshotPresentationLayout {
                 let deltaX = ((visibleSize.width / 2) - visibleFocusRect.midX) * 0.82
                 let deltaY = ((visibleSize.height / 2) - visibleFocusRect.midY) * 0.82
 
-                imageOrigin.x = clamp(imageOrigin.x + deltaX, min: 0, max: canvasSize.width - visibleSize.width)
-                imageOrigin.y = clamp(imageOrigin.y + deltaY, min: 0, max: canvasSize.height - visibleSize.height)
+                imageOrigin.x = alignedValue(
+                    clamp(imageOrigin.x + deltaX, min: 0, max: canvasSize.width - visibleSize.width),
+                    scale: pixelScale
+                )
+                imageOrigin.y = alignedValue(
+                    clamp(imageOrigin.y + deltaY, min: 0, max: canvasSize.height - visibleSize.height),
+                    scale: pixelScale
+                )
             }
 
-            imageFrame = CGRect(origin: imageOrigin, size: visibleSize)
-            backgroundCornerRadius = min(max(appearance.clampedPadding * 0.48, 22), 42)
+            imageFrame = alignedRect(CGRect(origin: imageOrigin, size: visibleSize), scale: pixelScale)
+            backgroundCornerRadius = alignedValue(appearance.clampedBackgroundCornerRadius, scale: pixelScale)
         } else {
             canvasSize = visibleImageRect.size
             imageFrame = CGRect(origin: .zero, size: visibleImageRect.size)
@@ -175,16 +182,41 @@ enum ScreenshotRenderer {
     }
 
     private static func exportScale(for capturedImage: CapturedImage) -> CGFloat {
-        if let cgImage = capturedImage.image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
-            let widthScale = CGFloat(cgImage.width) / max(capturedImage.image.size.width, 1)
-            let heightScale = CGFloat(cgImage.height) / max(capturedImage.image.size.height, 1)
-            return max(widthScale, heightScale, capturedImage.displayScale)
-        }
-
-        return capturedImage.displayScale
+        pixelScale(for: capturedImage)
     }
 }
 
 private func clamp(_ value: CGFloat, min minimum: CGFloat, max maximum: CGFloat) -> CGFloat {
     Swift.max(minimum, Swift.min(maximum, value))
+}
+
+private func pixelScale(for capturedImage: CapturedImage) -> CGFloat {
+    if let cgImage = capturedImage.image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
+        let widthScale = CGFloat(cgImage.width) / max(capturedImage.image.size.width, 1)
+        let heightScale = CGFloat(cgImage.height) / max(capturedImage.image.size.height, 1)
+        return max(widthScale, heightScale, capturedImage.displayScale, 1)
+    }
+
+    return max(capturedImage.displayScale, 1)
+}
+
+private func alignedValue(_ value: CGFloat, scale: CGFloat) -> CGFloat {
+    guard scale > 0 else { return value }
+    return (value * scale).rounded() / scale
+}
+
+private func alignedSize(_ size: CGSize, scale: CGFloat) -> CGSize {
+    CGSize(
+        width: alignedValue(size.width, scale: scale),
+        height: alignedValue(size.height, scale: scale)
+    )
+}
+
+private func alignedRect(_ rect: CGRect, scale: CGFloat) -> CGRect {
+    CGRect(
+        x: alignedValue(rect.origin.x, scale: scale),
+        y: alignedValue(rect.origin.y, scale: scale),
+        width: alignedValue(rect.size.width, scale: scale),
+        height: alignedValue(rect.size.height, scale: scale)
+    )
 }
